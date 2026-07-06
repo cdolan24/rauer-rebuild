@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import hmac
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request, UploadFile
 
 from src.api.schemas import DocumentContentResponse, DocumentListResponse, DocumentSummary, UploadResponse
 from src.pipeline.ingest import ingest_pdf
@@ -64,9 +65,17 @@ def get_document_content(document_id: str, request: Request) -> DocumentContentR
 
 @router.post("/documents/upload", response_model=UploadResponse, status_code=202)
 async def upload_document(
-    file: UploadFile, request: Request, background_tasks: BackgroundTasks
+    file: UploadFile,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    admin_password: str = Form(...),
 ) -> UploadResponse:
     config = request.app.state.config
+
+    configured_password = config.admin_password
+    if configured_password is None or not hmac.compare_digest(admin_password, configured_password):
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+
     registry = request.app.state.registry
     vector_store = request.app.state.vector_store
     ollama_client = request.app.state.ollama_client

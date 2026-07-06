@@ -37,6 +37,9 @@ def fake_ollama_client() -> FakeOllamaClient:
     return FakeOllamaClient()
 
 
+TEST_ADMIN_PASSWORD = "test-admin-password"
+
+
 def write_test_config(tmp_path, fail_ollama: bool = False) -> str:
     """Write a config.yaml pointing entirely at tmp_path, for isolated API tests."""
     config_path = tmp_path / "config.yaml"
@@ -76,6 +79,9 @@ rag:
   # relationship to query text, so cosine scores are arbitrary here -
   # don't filter on them in tests.
   min_score: 0.0
+
+auth:
+  admin_password: "{TEST_ADMIN_PASSWORD}"
 """,
         encoding="utf-8",
     )

@@ -65,3 +65,31 @@ def test_missing_required_section_raises(tmp_path):
 
     with pytest.raises(ConfigError):
         load_config(config_path)
+
+
+def test_admin_password_defaults_to_none_when_absent(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG, encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.admin_password is None
+
+
+@pytest.mark.parametrize("placeholder", ["changeme", ""])
+def test_admin_password_treats_placeholders_as_unset(tmp_path, placeholder):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG + f'\nauth:\n  admin_password: "{placeholder}"\n', encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.admin_password is None
+
+
+def test_admin_password_can_be_set(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG + '\nauth:\n  admin_password: "real-secret"\n', encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.admin_password == "real-secret"

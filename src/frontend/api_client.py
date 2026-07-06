@@ -7,6 +7,10 @@ class ApiClientError(Exception):
     """Raised when the backend API is unreachable or returns an error."""
 
 
+class ApiAuthError(ApiClientError):
+    """Raised when the backend rejects a request for bad/missing credentials."""
+
+
 class ApiClient:
     """Thin HTTP client the Gradio frontend uses to talk to the FastAPI backend."""
 
@@ -38,13 +42,16 @@ class ApiClient:
     def get_document_content(self, document_id: str) -> str:
         return self._request("GET", f"/api/documents/{document_id}/content")["content"]
 
-    def upload_document(self, filename: str, content: bytes) -> dict:
+    def upload_document(self, filename: str, content: bytes, admin_password: str) -> dict:
         try:
             response = httpx.post(
                 f"{self._base_url}/api/documents/upload",
                 files={"file": (filename, content, "application/pdf")},
+                data={"admin_password": admin_password},
                 timeout=self._timeout,
             )
+            if response.status_code == 401:
+                raise ApiAuthError("Incorrect admin password")
             response.raise_for_status()
         except httpx.HTTPError as e:
             raise ApiClientError(f"Upload failed: {e}") from e

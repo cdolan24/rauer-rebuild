@@ -35,11 +35,15 @@ The system SHALL expose endpoints to list ingested documents and retrieve detail
 - **THEN** the system returns the extracted text/markdown content for that document
 
 ### Requirement: Document Upload Endpoint
-The system SHALL expose an endpoint to upload a new PDF for ingestion.
+The system SHALL expose an endpoint to upload a new PDF for ingestion, and SHALL require a correct admin password on every upload request.
 
-#### Scenario: Uploading a new PDF
-- **WHEN** a client sends `POST /api/documents/upload` with a PDF file
+#### Scenario: Uploading a new PDF with a correct admin password
+- **WHEN** a client sends `POST /api/documents/upload` with a PDF file and the correct admin password
 - **THEN** the system accepts the file, begins ingestion, and returns a job/document identifier the client can use to check status
+
+#### Scenario: Uploading without a correct admin password
+- **WHEN** a client sends `POST /api/documents/upload` with a missing or incorrect admin password
+- **THEN** the system rejects the request with a 401 response and does not ingest the file
 
 ### Requirement: Search Endpoint
 The system SHALL expose an endpoint for direct vector search across ingested documents, independent of the chat flow.

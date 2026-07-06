@@ -43,6 +43,7 @@ class ApiConfig:
 class FrontendConfig:
     api_base_url: str
     port: int
+    request_timeout: float
 
 
 @dataclass
@@ -56,6 +57,7 @@ class Config:
     frontend: FrontendConfig
     log_level: str
     rag_min_score: float
+    admin_password: str | None
 
 
 class ConfigError(Exception):
@@ -117,10 +119,21 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         frontend=FrontendConfig(
             api_base_url=frontend["api_base_url"],
             port=int(frontend["port"]),
+            request_timeout=float(frontend.get("request_timeout", 180.0)),
         ),
         log_level=raw.get("logging", {}).get("level", "INFO"),
         rag_min_score=float(raw.get("rag", {}).get("min_score", 0.55)),
+        admin_password=_resolve_admin_password(raw.get("auth", {}).get("admin_password")),
     )
+
+
+_UNSET_ADMIN_PASSWORD_PLACEHOLDERS = {None, "", "changeme"}
+
+
+def _resolve_admin_password(value: str | None) -> str | None:
+    """Treat a missing/empty/placeholder password as "no password configured"
+    so a forgotten config doesn't silently leave uploads open."""
+    return None if value in _UNSET_ADMIN_PASSWORD_PLACEHOLDERS else value
 
 
 def get_config_path() -> str:

@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
 import gradio as gr
 
-from src.frontend.api_client import ApiClient, ApiClientError
+from src.frontend.api_client import ApiAuthError, ApiClient, ApiClientError
 from src.utils.config import load_config
 
 _PAGE_MARKER_RE = re.compile(r"--- page (\d+) ---\n")
@@ -45,16 +45,26 @@ def build_app(client: ApiClient) -> gr.Blocks:
     def send_message(message, history, conversation_id, sources_state):
         history = history or []
         if not message.strip():
-            return history, gr.update(), sources_state, ""
+            yield history, gr.update(), sources_state, message
+            return
+
+        # Local LLM generation can take a while - show something immediately
+        # rather than leaving the UI looking frozen/disconnected.
+        thinking_history = history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": "_Thinking..._"},
+        ]
+        yield thinking_history, gr.update(), sources_state, ""
 
         try:
             result = client.send_chat(message, conversation_id)
         except ApiClientError as e:
-            history = history + [
+            error_history = history + [
                 {"role": "user", "content": message},
                 {"role": "assistant", "content": f"Could not reach the backend: {e}"},
             ]
-            return history, gr.update(choices=[]), sources_state, ""
+            yield error_history, gr.update(choices=[]), sources_state, ""
+            return
 
         sources = result["sources"]
         if sources:
@@ -64,11 +74,11 @@ def build_app(client: ApiClient) -> gr.Blocks:
             labels = []
             answer = result["response"]
 
-        history = history + [
+        final_history = history + [
             {"role": "user", "content": message},
             {"role": "assistant", "content": answer},
         ]
-        return history, gr.update(choices=labels, value=None), sources, ""
+        yield final_history, gr.update(choices=labels, value=None), sources, ""
 
     def view_citation(citation_label, sources):
         if not citation_label or not sources:
@@ -102,13 +112,15 @@ def build_app(client: ApiClient) -> gr.Blocks:
         except ApiClientError as e:
             return f"Could not load document: {e}"
 
-    def upload_document(file):
+    def upload_document(file, admin_password):
         if file is None:
             return "No file selected."
         try:
             with open(file.name, "rb") as f:
                 content = f.read()
-            result = client.upload_document(os.path.basename(file.name), content)
+            result = client.upload_document(os.path.basename(file.name), content, admin_password or "")
+        except ApiAuthError:
+            return "Incorrect admin password - upload rejected."
         except ApiClientError as e:
             return f"Upload failed: {e}"
         return (
@@ -140,7 +152,8 @@ def build_app(client: ApiClient) -> gr.Blocks:
                 status_text = gr.Markdown("")
                 doc_viewer = gr.Textbox(label="Content", lines=25, interactive=False)
 
-                gr.Markdown("### Upload a new PDF")
+                gr.Markdown("### Upload a new PDF (admin only)")
+                admin_password_box = gr.Textbox(label="Admin password", type="password")
                 upload_file = gr.File(label="PDF file", file_types=[".pdf"])
                 upload_status = gr.Markdown("")
 
@@ -166,7 +179,9 @@ def build_app(client: ApiClient) -> gr.Blocks:
         refresh_btn.click(refresh_documents, outputs=[doc_dropdown, status_text])
         doc_dropdown.change(view_selected_document, inputs=[doc_dropdown], outputs=[doc_viewer])
 
-        upload_file.upload(upload_document, inputs=[upload_file], outputs=[upload_status])
+        upload_file.upload(
+            upload_document, inputs=[upload_file, admin_password_box], outputs=[upload_status]
+        )
 
         demo.load(refresh_documents, outputs=[doc_dropdown, status_text])
 
@@ -175,7 +190,7 @@ def build_app(client: ApiClient) -> gr.Blocks:
 
 def main() -> None:
     config = load_config()
-    client = ApiClient(config.frontend.api_base_url)
+    client = ApiClient(config.frontend.api_base_url, timeout=config.frontend.request_timeout)
     demo = build_app(client)
     demo.launch(server_port=config.frontend.port)
 

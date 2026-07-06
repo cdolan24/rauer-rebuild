@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import fitz
 
+from tests.conftest import TEST_ADMIN_PASSWORD
+
 
 def _make_pdf_bytes(page_texts: list[str]) -> bytes:
     doc = fitz.open()
@@ -26,6 +28,7 @@ def test_upload_then_chat_yields_cited_answer(api_client):
     upload_response = api_client.post(
         "/api/documents/upload",
         files={"file": ("story.pdf", pdf_bytes, "application/pdf")},
+        data={"admin_password": TEST_ADMIN_PASSWORD},
     )
     assert upload_response.status_code == 202
     document_id = upload_response.json()["document_id"]

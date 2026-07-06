@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pathlib
+
 import fitz
 
 from src.pipeline.chunker import Chunk
 from src.pipeline.embeddings import EmbeddedChunk
+from tests.conftest import TEST_ADMIN_PASSWORD
 
 # api_client / unhealthy_api_client fixtures come from tests/conftest.py
 
@@ -159,6 +162,7 @@ def test_upload_document_ingests_via_background_task(api_client):
     response = api_client.post(
         "/api/documents/upload",
         files={"file": ("uploaded_story.pdf", pdf_bytes, "application/pdf")},
+        data={"admin_password": TEST_ADMIN_PASSWORD},
     )
 
     assert response.status_code == 202
@@ -168,3 +172,58 @@ def test_upload_document_ingests_via_background_task(api_client):
     detail = api_client.get(f"/api/documents/{document_id}")
     assert detail.status_code == 200
     assert detail.json()["status"] == "processed"
+
+
+def test_upload_document_rejects_wrong_password(api_client):
+    pdf_bytes = _make_pdf_bytes(["Aragorn walked into Bree."])
+
+    response = api_client.post(
+        "/api/documents/upload",
+        files={"file": ("rejected_story.pdf", pdf_bytes, "application/pdf")},
+        data={"admin_password": "not-the-right-password"},
+    )
+
+    assert response.status_code == 401
+    detail = api_client.get("/api/documents/rejected_story")
+    assert detail.status_code == 404
+
+
+def test_upload_document_rejects_missing_password(api_client):
+    pdf_bytes = _make_pdf_bytes(["Aragorn walked into Bree."])
+
+    response = api_client.post(
+        "/api/documents/upload",
+        files={"file": ("no_password_story.pdf", pdf_bytes, "application/pdf")},
+    )
+
+    assert response.status_code == 422  # Form(...) is required
+
+
+def test_upload_document_rejects_when_no_admin_password_configured(tmp_path, monkeypatch):
+    import src.api.main as main_module
+    from fastapi.testclient import TestClient
+    from tests.conftest import FakeOllamaClient, write_test_config
+
+    config_path = write_test_config(tmp_path)
+    # Overwrite with an unset admin password (placeholder -> None).
+    config_file = pathlib.Path(config_path)
+    config_file.write_text(
+        config_file.read_text(encoding="utf-8").replace(
+            f'admin_password: "{TEST_ADMIN_PASSWORD}"', 'admin_password: "changeme"'
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url: FakeOllamaClient())
+
+    app = main_module.create_app()
+    with TestClient(app) as client:
+        pdf_bytes = _make_pdf_bytes(["text"])
+        response = client.post(
+            "/api/documents/upload",
+            files={"file": ("story.pdf", pdf_bytes, "application/pdf")},
+            data={"admin_password": "changeme"},
+        )
+
+    assert response.status_code == 401
