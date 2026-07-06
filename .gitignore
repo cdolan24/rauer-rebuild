@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+config.yaml
+vector_db/
+data_storage/
+processed/
+.coverage
+htmlcov/
+
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

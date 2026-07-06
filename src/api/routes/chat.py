@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+import time
+
+from fastapi import APIRouter, Request
+
+from src.api.schemas import (
+    ChatRequest,
+    ChatResponseModel,
+    ConversationHistoryResponse,
+    ConversationMessage,
+    SourceModel,
+)
+
+router = APIRouter(tags=["chat"])
+
+
+@router.post("/chat", response_model=ChatResponseModel)
+def chat(payload: ChatRequest, request: Request) -> ChatResponseModel:
+    chat_engine = request.app.state.chat_engine
+    query_logger = request.app.state.query_logger
+
+    start = time.monotonic()
+    result = chat_engine.ask(payload.conversation_id, payload.message)
+    elapsed_ms = int((time.monotonic() - start) * 1000)
+
+    query_logger.log(payload.conversation_id, payload.message, elapsed_ms)
+
+    return ChatResponseModel(
+        response=result.answer,
+        sources=[
+            SourceModel(
+                document_id=c.document_id,
+                chunk_id=c.chunk_id,
+                page_start=c.page_start,
+                page_end=c.page_end,
+                score=c.score,
+            )
+            for c in result.citations
+        ],
+        conversation_id=payload.conversation_id,
+    )
+
+
+@router.get("/conversations/{conversation_id}", response_model=ConversationHistoryResponse)
+def get_conversation(conversation_id: str, request: Request) -> ConversationHistoryResponse:
+    conversation_store = request.app.state.conversation_store
+    history = conversation_store.get_history(conversation_id)
+
+    messages: list[ConversationMessage] = []
+    for turn in history:
+        messages.append(ConversationMessage(role="user", content=turn.question))
+        messages.append(ConversationMessage(role="assistant", content=turn.answer))
+
+    return ConversationHistoryResponse(conversation_id=conversation_id, messages=messages)
+
+
+@router.delete("/conversations/{conversation_id}")
+def delete_conversation(conversation_id: str, request: Request) -> dict[str, str]:
+    conversation_store = request.app.state.conversation_store
+    conversation_store.clear(conversation_id)
+    return {"status": "cleared"}

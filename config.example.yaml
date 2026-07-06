@@ -1,0 +1,41 @@
+# Copy to config.yaml and adjust as needed.
+
+ollama:
+  base_url: "http://localhost:11434"
+  chat_model: "llama3.2:latest"
+  embedding_model: "nomic-embed-text:latest"
+
+chunking:
+  chunk_size: 800
+  chunk_overlap: 150
+
+vector_db:
+  path: "./vector_db"
+  collection_name: "buddharauer_docs"
+
+data_storage:
+  path: "./data_storage/buddharauer.db"
+
+paths:
+  data_dir: "./data"
+  processed_dir: "./processed"
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "http://localhost:7860"
+
+frontend:
+  api_base_url: "http://localhost:8000"
+  port: 7860
+
+logging:
+  level: "INFO"
+
+rag:
+  # Minimum cosine similarity (vector_db uses hnsw:space=cosine) a retrieved
+  # chunk must clear to be treated as relevant. Below this, the chat falls
+  # back to "I don't have information about that." Tuned empirically against
+  # nomic-embed-text: relevant matches scored ~0.6-0.7, irrelevant ~0.45-0.5.
+  min_score: 0.55

@@ -1,0 +1,36 @@
+## ADDED Requirements
+
+### Requirement: Split Chat and Document Viewer Layout
+The frontend SHALL present a chat interface and a source document viewer side-by-side.
+
+#### Scenario: Viewing chat and sources together
+- **WHEN** a user opens the web frontend
+- **THEN** the chat panel and document viewer panel are both visible without navigating away from the chat
+
+### Requirement: Sending and Viewing Messages
+The frontend SHALL allow a user to type a question, submit it, and view the assistant's response in the chat panel.
+
+#### Scenario: Sending a message
+- **WHEN** a user types a question and submits it
+- **THEN** the user's message and the assistant's response appear in the chat history in order
+
+### Requirement: Citation Display Linked to Document Viewer
+The frontend SHALL display citations for each assistant response and allow the user to view the referenced source content.
+
+#### Scenario: Selecting a citation
+- **WHEN** a user selects a citation shown alongside an assistant response
+- **THEN** the document viewer displays the corresponding source document at/near the cited page
+
+### Requirement: Document Selection
+The frontend SHALL allow a user to browse and select from the list of ingested documents independent of an active chat citation.
+
+#### Scenario: Browsing available documents
+- **WHEN** a user opens the document selector
+- **THEN** the frontend lists all ingested documents (from the chat-api document listing) for the user to choose from
+
+### Requirement: Upload Interface
+The frontend SHALL allow a user to upload a new PDF and see its processing status.
+
+#### Scenario: Uploading a document from the UI
+- **WHEN** a user uploads a PDF through the frontend
+- **THEN** the frontend shows the document's ingestion status until it becomes available for chat
