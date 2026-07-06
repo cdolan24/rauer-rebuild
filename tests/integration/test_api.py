@@ -190,6 +190,43 @@ def test_upload_document_ingests_via_background_task(api_client):
     assert detail.json()["status"] == "processed"
 
 
+def test_verify_admin_password_succeeds_with_correct_password(api_client):
+    response = api_client.post("/api/auth/verify", json={"admin_password": TEST_ADMIN_PASSWORD})
+
+    assert response.status_code == 200
+    assert response.json() == {"valid": True}
+
+
+def test_verify_admin_password_rejects_wrong_password(api_client):
+    response = api_client.post("/api/auth/verify", json={"admin_password": "not-the-right-password"})
+
+    assert response.status_code == 401
+
+
+def test_verify_admin_password_rejects_when_none_configured(tmp_path, monkeypatch):
+    import src.api.main as main_module
+    from fastapi.testclient import TestClient
+    from tests.conftest import FakeOllamaClient, write_test_config
+
+    config_path = write_test_config(tmp_path)
+    config_file = pathlib.Path(config_path)
+    config_file.write_text(
+        config_file.read_text(encoding="utf-8").replace(
+            f'admin_password: "{TEST_ADMIN_PASSWORD}"', 'admin_password: "changeme"'
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
+
+    app = main_module.create_app()
+    with TestClient(app) as client:
+        response = client.post("/api/auth/verify", json={"admin_password": "changeme"})
+
+    assert response.status_code == 401
+
+
 def test_upload_document_rejects_wrong_password(api_client):
     pdf_bytes = _make_pdf_bytes(["Aragorn walked into Bree."])
 

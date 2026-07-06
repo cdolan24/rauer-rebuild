@@ -79,3 +79,11 @@ class HealthResponse(BaseModel):
     vector_db: str
     models_loaded: list[str]
     documents_indexed: int
+
+
+class AdminAuthRequest(BaseModel):
+    admin_password: str
+
+
+class AdminAuthResponse(BaseModel):
+    valid: bool

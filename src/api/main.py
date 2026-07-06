@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api.routes import chat, documents, health, search
+from src.api.routes import auth, chat, documents, health, search
 from src.database.document_registry import DocumentRegistry
 from src.database.query_logger import QueryLogger
 from src.database.vector_store import VectorStore
@@ -73,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
     app.include_router(health.router, prefix="/api")
+    app.include_router(auth.router, prefix="/api")
 
     return app
 

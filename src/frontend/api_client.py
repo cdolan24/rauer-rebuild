@@ -59,3 +59,14 @@ class ApiClient:
 
     def health(self) -> dict:
         return self._request("GET", "/api/health")
+
+    def verify_admin_password(self, admin_password: str) -> bool:
+        try:
+            response = httpx.post(
+                f"{self._base_url}/api/auth/verify",
+                json={"admin_password": admin_password},
+                timeout=self._timeout,
+            )
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"Could not verify admin password: {e}") from e
+        return response.status_code == 200

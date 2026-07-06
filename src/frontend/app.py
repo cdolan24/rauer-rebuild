@@ -128,6 +128,17 @@ def build_app(client: ApiClient) -> gr.Blocks:
             "Click 'Refresh document list' to check progress."
         )
 
+    def unlock_admin(password):
+        if not password:
+            return gr.update(visible=False), "Enter the admin password.", None
+        try:
+            valid = client.verify_admin_password(password)
+        except ApiClientError as e:
+            return gr.update(visible=False), f"Could not reach the backend: {e}", None
+        if not valid:
+            return gr.update(visible=False), "Incorrect admin password.", None
+        return gr.update(visible=True), "Unlocked.", password
+
     with gr.Blocks(title="Buddharauer") as demo:
         conversation_id = gr.State(str(uuid.uuid4()))
         sources_state = gr.State([])
@@ -152,11 +163,6 @@ def build_app(client: ApiClient) -> gr.Blocks:
                 status_text = gr.Markdown("")
                 doc_viewer = gr.Textbox(label="Content", lines=25, interactive=False)
 
-                gr.Markdown("### Upload a new PDF (admin only)")
-                admin_password_box = gr.Textbox(label="Admin password", type="password")
-                upload_file = gr.File(label="PDF file", file_types=[".pdf"])
-                upload_status = gr.Markdown("")
-
         send_btn.click(
             send_message,
             inputs=[message_box, chatbot, conversation_id, sources_state],
@@ -179,11 +185,36 @@ def build_app(client: ApiClient) -> gr.Blocks:
         refresh_btn.click(refresh_documents, outputs=[doc_dropdown, status_text])
         doc_dropdown.change(view_selected_document, inputs=[doc_dropdown], outputs=[doc_viewer])
 
-        upload_file.upload(
-            upload_document, inputs=[upload_file, admin_password_box], outputs=[upload_status]
+        demo.load(refresh_documents, outputs=[doc_dropdown, status_text])
+
+    with demo.route("Admin", "/admin"):
+        admin_password_state = gr.State(None)
+
+        gr.Markdown("# Admin - Upload New PDFs")
+        gr.Markdown("Enter the admin password to unlock the upload form.")
+
+        unlock_password_box = gr.Textbox(label="Admin password", type="password")
+        unlock_btn = gr.Button("Unlock", variant="primary")
+        unlock_status = gr.Markdown("")
+
+        with gr.Group(visible=False) as upload_group:
+            upload_file = gr.File(label="PDF file", file_types=[".pdf"])
+            upload_status = gr.Markdown("")
+
+        unlock_btn.click(
+            unlock_admin,
+            inputs=[unlock_password_box],
+            outputs=[upload_group, unlock_status, admin_password_state],
+        )
+        unlock_password_box.submit(
+            unlock_admin,
+            inputs=[unlock_password_box],
+            outputs=[upload_group, unlock_status, admin_password_state],
         )
 
-        demo.load(refresh_documents, outputs=[doc_dropdown, status_text])
+        upload_file.upload(
+            upload_document, inputs=[upload_file, admin_password_state], outputs=[upload_status]
+        )
 
     return demo
 

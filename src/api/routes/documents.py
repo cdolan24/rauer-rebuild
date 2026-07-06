@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hmac
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request, UploadFile
 
 from src.api.schemas import DocumentContentResponse, DocumentListResponse, DocumentSummary, UploadResponse
 from src.pipeline.ingest import ingest_pdf
+from src.utils.auth import verify_admin_password
 
 router = APIRouter(tags=["documents"])
 
@@ -72,8 +72,7 @@ async def upload_document(
 ) -> UploadResponse:
     config = request.app.state.config
 
-    configured_password = config.admin_password
-    if configured_password is None or not hmac.compare_digest(admin_password, configured_password):
+    if not verify_admin_password(config.admin_password, admin_password):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
 
     registry = request.app.state.registry
