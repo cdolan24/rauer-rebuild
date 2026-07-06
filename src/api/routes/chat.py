@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from src.api.schemas import (
     ChatRequest,
@@ -11,6 +11,7 @@ from src.api.schemas import (
     ConversationMessage,
     SourceModel,
 )
+from src.utils.ollama_client import OllamaError
 
 router = APIRouter(tags=["chat"])
 
@@ -21,7 +22,10 @@ def chat(payload: ChatRequest, request: Request) -> ChatResponseModel:
     query_logger = request.app.state.query_logger
 
     start = time.monotonic()
-    result = chat_engine.ask(payload.conversation_id, payload.message)
+    try:
+        result = chat_engine.ask(payload.conversation_id, payload.message)
+    except OllamaError as e:
+        raise HTTPException(status_code=503, detail=f"Local LLM service unavailable: {e}") from e
     elapsed_ms = int((time.monotonic() - start) * 1000)
 
     query_logger.log(payload.conversation_id, payload.message, elapsed_ms)

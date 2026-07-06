@@ -95,7 +95,7 @@ def api_client(tmp_path, monkeypatch):
 
     config_path = write_test_config(tmp_path)
     monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
-    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url: FakeOllamaClient())
+    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
 
     app = main_module.create_app()
     with TestClient(app) as client:
@@ -109,7 +109,7 @@ def unhealthy_api_client(tmp_path, monkeypatch):
 
     config_path = write_test_config(tmp_path)
     monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
-    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url: FakeOllamaClient(fail=True))
+    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient(fail=True))
 
     app = main_module.create_app()
     with TestClient(app) as client:

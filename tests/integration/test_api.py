@@ -29,6 +29,22 @@ def test_health_endpoint_ollama_unreachable(unhealthy_api_client):
     assert data["ollama"] == "unreachable"
 
 
+def test_chat_endpoint_returns_503_when_ollama_unavailable(unhealthy_api_client):
+    response = unhealthy_api_client.post(
+        "/api/chat", json={"message": "Who is Aragorn?", "conversation_id": "conv-unhealthy"}
+    )
+
+    assert response.status_code == 503
+    assert "Local LLM service unavailable" in response.json()["detail"]
+
+
+def test_search_endpoint_returns_503_when_ollama_unavailable(unhealthy_api_client):
+    response = unhealthy_api_client.post("/api/search", json={"query": "anything", "limit": 5})
+
+    assert response.status_code == 503
+    assert "Local LLM service unavailable" in response.json()["detail"]
+
+
 def test_list_documents_empty(api_client):
     response = api_client.get("/api/documents")
 
@@ -215,7 +231,7 @@ def test_upload_document_rejects_when_no_admin_password_configured(tmp_path, mon
     )
 
     monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
-    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url: FakeOllamaClient())
+    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
 
     app = main_module.create_app()
     with TestClient(app) as client:

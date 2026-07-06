@@ -93,3 +93,24 @@ def test_admin_password_can_be_set(tmp_path):
     config = load_config(config_path)
 
     assert config.admin_password == "real-secret"
+
+
+def test_ollama_request_timeout_defaults_when_absent(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG, encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.ollama.request_timeout == 180.0
+
+
+def test_ollama_request_timeout_can_be_overridden(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG.replace(
+        'embedding_model: "nomic-embed-text:latest"',
+        'embedding_model: "nomic-embed-text:latest"\n  request_timeout: 30',
+    ), encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.ollama.request_timeout == 30.0

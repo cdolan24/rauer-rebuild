@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from src.api.schemas import SearchRequest, SearchResponse, SearchResultModel
+from src.utils.ollama_client import OllamaError
 
 router = APIRouter(tags=["search"])
 
@@ -10,7 +11,10 @@ router = APIRouter(tags=["search"])
 @router.post("/search", response_model=SearchResponse)
 def search(payload: SearchRequest, request: Request) -> SearchResponse:
     retriever = request.app.state.retriever
-    results = retriever.retrieve(payload.query, top_k=payload.limit)
+    try:
+        results = retriever.retrieve(payload.query, top_k=payload.limit)
+    except OllamaError as e:
+        raise HTTPException(status_code=503, detail=f"Local LLM service unavailable: {e}") from e
 
     return SearchResponse(
         results=[

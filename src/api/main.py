@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     config = load_config(get_config_path())
     setup_logging(config.log_level)
 
-    ollama_client = OllamaClient(config.ollama.base_url)
+    ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
     registry = DocumentRegistry(config.data_storage_path)
     query_logger = QueryLogger(config.data_storage_path)

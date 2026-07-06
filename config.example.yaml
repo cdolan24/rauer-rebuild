@@ -4,6 +4,10 @@ ollama:
   base_url: "http://localhost:11434"
   chat_model: "llama3.2:latest"
   embedding_model: "nomic-embed-text:latest"
+  # Local chat generation regularly takes 40-90s+ on modest hardware. This
+  # must be >= frontend.request_timeout below, or the backend will give up
+  # on Ollama before the frontend gives up on the backend.
+  request_timeout: 180
 
 chunking:
   chunk_size: 800

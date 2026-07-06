@@ -12,6 +12,7 @@ class OllamaConfig:
     base_url: str
     chat_model: str
     embedding_model: str
+    request_timeout: float
 
 
 @dataclass
@@ -97,6 +98,7 @@ def load_config(path: str | Path = "config.yaml") -> Config:
             base_url=ollama["base_url"],
             chat_model=ollama["chat_model"],
             embedding_model=ollama["embedding_model"],
+            request_timeout=float(ollama.get("request_timeout", 180.0)),
         ),
         chunking=ChunkingConfig(
             chunk_size=int(chunking["chunk_size"]),

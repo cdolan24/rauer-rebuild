@@ -27,7 +27,7 @@ def main() -> int:
     config = load_config(args.config)
     setup_logging(config.log_level)
 
-    ollama_client = OllamaClient(config.ollama.base_url)
+    ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
     registry = DocumentRegistry(config.data_storage_path)
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
 
