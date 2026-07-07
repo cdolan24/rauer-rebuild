@@ -9,7 +9,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.database.document_registry import DocumentRegistry
-from src.database.entity_store import EntityStore
 from src.database.vector_store import VectorStore
 from src.pipeline.ingest import ingest_pdf
 from src.utils.config import load_config
@@ -31,7 +30,6 @@ def main() -> int:
     ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
     registry = DocumentRegistry(config.data_storage_path)
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
-    entity_store = EntityStore(config.data_storage_path)
 
     if args.file:
         pdf_paths = [Path(args.file)]
@@ -54,8 +52,6 @@ def main() -> int:
             config.chunking.chunk_size,
             config.chunking.chunk_overlap,
             config.paths.processed_dir,
-            entity_store=entity_store,
-            chat_model=config.ollama.chat_model,
         )
         succeeded += int(ok)
         failed += int(not ok)

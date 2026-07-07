@@ -49,28 +49,3 @@ def test_score_ordering_reflects_similarity(tmp_path):
 
     assert [r.chunk_id for r in results] == ["close", "far"]
     assert results[0].score > results[1].score
-
-
-def test_get_chunks_by_document_reconstructs_chunks(tmp_path):
-    vector_store = VectorStore(path=str(tmp_path / "vector_db"), collection_name="test")
-    vector_store.add_chunks(
-        [
-            _embedded("c0", [1.0, 0.0, 0.0, 0.0]),
-            _embedded("c1", [0.0, 1.0, 0.0, 0.0]),
-        ]
-    )
-
-    chunks = vector_store.get_chunks_by_document("doc1")
-
-    assert [c.chunk_id for c in chunks] == ["c0", "c1"]
-    assert all(c.document_id == "doc1" for c in chunks)
-    assert chunks[0].text == "text-c0"
-
-
-def test_get_chunks_by_document_returns_empty_for_unknown_document(tmp_path):
-    vector_store = VectorStore(path=str(tmp_path / "vector_db"), collection_name="test")
-    vector_store.add_chunks([_embedded("c0", [1.0, 0.0, 0.0, 0.0])])
-
-    chunks = vector_store.get_chunks_by_document("nonexistent")
-
-    assert chunks == []

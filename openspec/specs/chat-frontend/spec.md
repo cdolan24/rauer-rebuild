@@ -20,15 +20,11 @@ The frontend SHALL allow a user to type a question, submit it, and view the assi
 - **THEN** the user's message and the assistant's response appear in the chat history in order
 
 ### Requirement: Citation Display Linked to Document Viewer
-The frontend SHALL display citations for each assistant response and allow the user to view the referenced source content, including a link to the original PDF page for that citation.
+The frontend SHALL display citations for each assistant response and allow the user to view the referenced source content.
 
 #### Scenario: Selecting a citation
 - **WHEN** a user selects a citation shown alongside an assistant response
 - **THEN** the document viewer displays the corresponding source document at/near the cited page
-
-#### Scenario: Opening the original PDF for a citation
-- **WHEN** a user selects a citation shown alongside an assistant response
-- **THEN** a link is available that opens the original PDF at the cited page in the browser's PDF viewer
 
 ### Requirement: Document Selection
 The frontend SHALL allow a user to browse and select from the list of ingested documents independent of an active chat citation.

@@ -41,12 +41,7 @@ def _format_citation_label(source: dict) -> str:
     return f"{source['document_id']} ({pages})"
 
 
-def _pdf_link_html(api_base_url: str, document_id: str, page: int) -> str:
-    url = f"{api_base_url}/api/documents/{document_id}/pdf#page={page}"
-    return f'<a href="{url}" target="_blank">View original PDF (page {page})</a>'
-
-
-def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
+def build_app(client: ApiClient) -> gr.Blocks:
     def send_message(message, history, conversation_id, sources_state):
         history = history or []
         if not message.strip():
@@ -87,17 +82,16 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
 
     def view_citation(citation_label, sources):
         if not citation_label or not sources:
-            return "", ""
+            return ""
         labels = [_format_citation_label(s) for s in sources]
         if citation_label not in labels:
-            return "", ""
+            return ""
         source = sources[labels.index(citation_label)]
-        pdf_link = _pdf_link_html(api_base_url, source["document_id"], source["page_start"])
         try:
             content = client.get_document_content(source["document_id"])
         except ApiClientError as e:
-            return f"Could not load document: {e}", pdf_link
-        return _extract_page_range(content, source["page_start"], source["page_end"]), pdf_link
+            return f"Could not load document: {e}"
+        return _extract_page_range(content, source["page_start"], source["page_end"])
 
     def refresh_documents():
         try:
@@ -111,13 +105,12 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
 
     def view_selected_document(doc_choice):
         if not doc_choice:
-            return "", ""
+            return ""
         document_id = doc_choice.split(" (")[0]
-        pdf_link = _pdf_link_html(api_base_url, document_id, 1)
         try:
-            return client.get_document_content(document_id), pdf_link
+            return client.get_document_content(document_id)
         except ApiClientError as e:
-            return f"Could not load document: {e}", pdf_link
+            return f"Could not load document: {e}"
 
     def upload_document(file, admin_password):
         if file is None:
@@ -151,7 +144,6 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
         sources_state = gr.State([])
 
         gr.Markdown("# Buddharauer - Malifaux Document Explorer")
-        gr.HTML(f'<a href="{api_base_url}/wiki" target="_blank">Browse the Wiki</a>')
 
         with gr.Row():
             with gr.Column(scale=1):
@@ -169,7 +161,6 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
                 doc_dropdown = gr.Dropdown(label="Select document", choices=[], interactive=True)
                 refresh_btn = gr.Button("Refresh document list")
                 status_text = gr.Markdown("")
-                pdf_link_html = gr.HTML("")
                 doc_viewer = gr.Textbox(label="Content", lines=25, interactive=False)
 
         send_btn.click(
@@ -188,13 +179,11 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
         )
 
         citation_dropdown.change(
-            view_citation, inputs=[citation_dropdown, sources_state], outputs=[doc_viewer, pdf_link_html]
+            view_citation, inputs=[citation_dropdown, sources_state], outputs=[doc_viewer]
         )
 
         refresh_btn.click(refresh_documents, outputs=[doc_dropdown, status_text])
-        doc_dropdown.change(
-            view_selected_document, inputs=[doc_dropdown], outputs=[doc_viewer, pdf_link_html]
-        )
+        doc_dropdown.change(view_selected_document, inputs=[doc_dropdown], outputs=[doc_viewer])
 
         demo.load(refresh_documents, outputs=[doc_dropdown, status_text])
 
@@ -233,7 +222,7 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
 def main() -> None:
     config = load_config()
     client = ApiClient(config.frontend.api_base_url, timeout=config.frontend.request_timeout)
-    demo = build_app(client, config.frontend.api_base_url)
+    demo = build_app(client)
     demo.launch(server_port=config.frontend.port)
 
 

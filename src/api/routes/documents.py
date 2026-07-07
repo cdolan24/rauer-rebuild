@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
 
 from src.api.schemas import DocumentContentResponse, DocumentListResponse, DocumentSummary, UploadResponse
 from src.pipeline.ingest import ingest_pdf
@@ -64,20 +63,6 @@ def get_document_content(document_id: str, request: Request) -> DocumentContentR
     )
 
 
-@router.get("/documents/{document_id}/pdf")
-def get_document_pdf(document_id: str, request: Request) -> FileResponse:
-    registry = request.app.state.registry
-    record = registry.get(document_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail=f"Document '{document_id}' not found")
-
-    pdf_path = Path(record.source_path)
-    if not pdf_path.exists():
-        raise HTTPException(status_code=404, detail=f"Original PDF for '{document_id}' not found on disk")
-
-    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
-
-
 @router.post("/documents/upload", response_model=UploadResponse, status_code=202)
 async def upload_document(
     file: UploadFile,
@@ -91,7 +76,6 @@ async def upload_document(
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
 
     registry = request.app.state.registry
-    entity_store = request.app.state.entity_store
     vector_store = request.app.state.vector_store
     ollama_client = request.app.state.ollama_client
 
@@ -114,8 +98,6 @@ async def upload_document(
         config.chunking.chunk_size,
         config.chunking.chunk_overlap,
         config.paths.processed_dir,
-        entity_store=entity_store,
-        chat_model=config.ollama.chat_model,
     )
 
     return UploadResponse(document_id=document_id, status="pending")

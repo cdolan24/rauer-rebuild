@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 import chromadb
 
-from src.pipeline.chunker import Chunk
 from src.pipeline.embeddings import EmbeddedChunk
 
 
@@ -82,22 +81,3 @@ class VectorStore:
 
     def count(self) -> int:
         return self._collection.count()
-
-    def get_chunks_by_document(self, document_id: str) -> list[Chunk]:
-        """Reconstruct a document's chunks from the store (e.g. for re-running
-        entity extraction on an already-ingested document)."""
-        result = self._collection.get(where={"document_id": document_id})
-        chunks = [
-            Chunk(
-                chunk_id=chunk_id,
-                document_id=metadata["document_id"],
-                text=text,
-                page_start=metadata["page_start"],
-                page_end=metadata["page_end"],
-            )
-            for chunk_id, text, metadata in zip(
-                result["ids"], result["documents"], result["metadatas"]
-            )
-        ]
-        chunks.sort(key=lambda c: c.chunk_id)
-        return chunks
