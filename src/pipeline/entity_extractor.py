@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from src.database.entity_store import EntityMention, EntityStore
@@ -12,6 +13,7 @@ from src.utils.ollama_client import OllamaClient, OllamaError
 logger = get_logger(__name__)
 
 BATCH_SIZE = 45  # chunks per LLM call - mechanism proven on M1E, widening to cut call count further
+MAX_WORKERS = 8  # concurrent LLM calls - same pattern as pipeline/embeddings.py
 
 _ENTITY_TYPES = {"character", "location", "faction", "item"}
 
@@ -82,26 +84,29 @@ def extract_entities_for_document(
     ollama_client: OllamaClient,
     chat_model: str,
     entity_store: EntityStore,
+    max_workers: int = MAX_WORKERS,
 ) -> int:
     """Extract named entities from a document's chunks and index their mentions.
 
     Chunks are processed in batches (one LLM call per batch) rather than one call
-    per chunk. Mention indexing then scans every chunk in the document for each
-    entity found, not just the batch it was first mentioned in.
+    per chunk, and batches are sent concurrently (same rationale as
+    pipeline/embeddings.py: the LLM round-trip, not local work, is the
+    bottleneck). Mention indexing then scans every chunk in the document for
+    each entity found, not just the batch it was first mentioned in.
 
     Returns the number of distinct entities created.
     """
     if not chunks:
         return 0
 
-    seen_names: dict[str, int] = {}  # lowercased name -> entity_id, dedupe within this doc
     batches = _batch_chunks(chunks)
 
-    for i, batch in enumerate(batches):
+    def _call_batch(indexed_batch: tuple[int, list[Chunk]]) -> str | None:
+        i, batch = indexed_batch
         batch_text = "\n\n".join(c.text for c in batch)
         messages = _build_messages(batch_text)
         try:
-            response = ollama_client.chat(chat_model, messages, temperature=0.2)
+            return ollama_client.chat(chat_model, messages, temperature=0.2)
         except OllamaError as e:
             # One slow/failed batch shouldn't lose every entity found in the
             # other batches (and, critically, shouldn't skip mention indexing
@@ -110,8 +115,17 @@ def extract_entities_for_document(
                 "Entity extraction batch %d/%d failed for %s, skipping: %s",
                 i + 1, len(batches), document_id, e,
             )
-            continue
+            return None
 
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(batches))) as executor:
+        responses = list(executor.map(_call_batch, enumerate(batches)))
+
+    # Entity creation happens single-threaded after all responses are in, so
+    # there's no concurrent-write contention on entity_store or the dedupe dict.
+    seen_names: dict[str, int] = {}  # lowercased name -> entity_id, dedupe within this doc
+    for response in responses:
+        if response is None:
+            continue
         for extracted in _parse_entities(response):
             key = extracted.name.lower()
             if key in seen_names:
