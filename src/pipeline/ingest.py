@@ -3,12 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.database.document_registry import DocumentRegistry
+from src.database.entity_store import EntityStore
 from src.database.vector_store import VectorStore
 from src.pipeline.chunker import chunk_document
 from src.pipeline.embeddings import EmbeddingError, embed_chunks
+from src.pipeline.entity_extractor import extract_entities_for_document
 from src.pipeline.pdf_extractor import ExtractedDocument, PDFExtractionError, extract_pdf
 from src.utils.logging import get_logger
-from src.utils.ollama_client import OllamaClient
+from src.utils.ollama_client import OllamaClient, OllamaError
 
 logger = get_logger(__name__)
 
@@ -32,6 +34,8 @@ def ingest_pdf(
     chunk_size: int,
     chunk_overlap: int,
     processed_dir: str,
+    entity_store: EntityStore | None = None,
+    chat_model: str | None = None,
 ) -> bool:
     """Run the full ingestion pipeline for a single PDF. Returns True on success."""
     document_id = pdf_path.stem
@@ -61,4 +65,16 @@ def ingest_pdf(
     logger.info(
         "Processed %s: %d pages, %d chunks", pdf_path.name, document.page_count, len(chunks)
     )
+
+    if entity_store is not None and chat_model is not None:
+        try:
+            entity_count = extract_entities_for_document(
+                chunks, document_id, ollama_client, chat_model, entity_store
+            )
+            logger.info("Extracted %d entities for %s", entity_count, document_id)
+        except OllamaError as e:
+            # Entity tagging is an enhancement, not core to ingestion succeeding -
+            # don't fail an otherwise-successful ingestion over it.
+            logger.error("Entity extraction failed for %s: %s", pdf_path, e)
+
     return True

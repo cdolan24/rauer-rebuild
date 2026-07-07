@@ -112,6 +112,37 @@ def test_search_endpoint(api_client):
     assert results[0]["document_id"] == "fellowship"
 
 
+def test_get_document_pdf_serves_the_real_file(api_client, tmp_path):
+    doc = fitz.open()
+    doc.new_page()
+    pdf_path = tmp_path / "fellowship.pdf"
+    doc.save(str(pdf_path))
+    doc.close()
+
+    api_client.app.state.registry.mark_processed("fellowship", "fellowship", str(pdf_path), 1, 0)
+
+    response = api_client.get("/api/documents/fellowship/pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content == pdf_path.read_bytes()
+
+
+def test_get_document_pdf_404_for_unknown_document(api_client):
+    response = api_client.get("/api/documents/does-not-exist/pdf")
+    assert response.status_code == 404
+
+
+def test_get_document_pdf_404_when_file_missing_on_disk(api_client):
+    api_client.app.state.registry.mark_processed(
+        "ghost", "ghost", "path/that/does/not/exist.pdf", 1, 0
+    )
+
+    response = api_client.get("/api/documents/ghost/pdf")
+
+    assert response.status_code == 404
+
+
 def test_get_document_and_content(api_client):
     _seed_document(api_client)
 

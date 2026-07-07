@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.routes import auth, chat, documents, health, search
+from src.wiki.routes import router as wiki_router
 from src.database.document_registry import DocumentRegistry
+from src.database.entity_store import EntityStore
 from src.database.query_logger import QueryLogger
 from src.database.vector_store import VectorStore
 from src.rag.chat_engine import ChatEngine
@@ -28,9 +30,12 @@ async def lifespan(app: FastAPI):
     ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
     registry = DocumentRegistry(config.data_storage_path)
+    entity_store = EntityStore(config.data_storage_path)
     query_logger = QueryLogger(config.data_storage_path)
     conversation_store = ConversationStore()
-    retriever = Retriever(vector_store, ollama_client, config.ollama.embedding_model)
+    retriever = Retriever(
+        vector_store, ollama_client, config.ollama.embedding_model, entity_store=entity_store
+    )
     chat_engine = ChatEngine(
         retriever,
         ollama_client,
@@ -43,6 +48,7 @@ async def lifespan(app: FastAPI):
     app.state.ollama_client = ollama_client
     app.state.vector_store = vector_store
     app.state.registry = registry
+    app.state.entity_store = entity_store
     app.state.query_logger = query_logger
     app.state.conversation_store = conversation_store
     app.state.retriever = retriever
@@ -74,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(search.router, prefix="/api")
     app.include_router(health.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
+    app.include_router(wiki_router)
 
     return app
 

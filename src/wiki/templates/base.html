@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}Buddharauer Wiki{% endblock %}</title>
+    <style>
+        body { font-family: Georgia, serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+        nav { margin-bottom: 2rem; border-bottom: 2px solid #8b0000; padding-bottom: 0.5rem; }
+        nav a { margin-right: 1rem; text-decoration: none; color: #8b0000; font-weight: bold; }
+        h1 { border-bottom: 1px solid #ccc; padding-bottom: 0.3rem; }
+        .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.85rem; text-transform: capitalize; }
+        ul.entity-list { list-style: none; padding: 0; }
+        ul.entity-list li { padding: 0.3rem 0; }
+        ul.citations { list-style: none; padding: 0; }
+        ul.citations li { padding: 0.2rem 0; }
+        a { color: #8b0000; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/wiki">Wiki Home</a>
+        <a href="/">Chat</a>
+    </nav>
+    {% block content %}{% endblock %}
+</body>
+</html>

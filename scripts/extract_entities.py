@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""CLI to ingest PDFs from the data directory into the vector database."""
+"""CLI to (re-)run entity extraction for already-ingested documents."""
 from __future__ import annotations
 
 import argparse
@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.database.document_registry import DocumentRegistry
 from src.database.entity_store import EntityStore
 from src.database.vector_store import VectorStore
-from src.pipeline.ingest import ingest_pdf
+from src.pipeline.entity_extractor import extract_entities_for_document
 from src.utils.config import load_config
 from src.utils.logging import get_logger, setup_logging
 from src.utils.ollama_client import OllamaClient
@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("file", nargs="?", help="Process a single PDF instead of the whole data dir")
+    parser.add_argument("document_id", nargs="?", help="Extract entities for a single document id instead of all processed documents")
     parser.add_argument("--config", default="config.yaml", help="Path to config.yaml")
     args = parser.parse_args()
 
@@ -33,35 +33,26 @@ def main() -> int:
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
     entity_store = EntityStore(config.data_storage_path)
 
-    if args.file:
-        pdf_paths = [Path(args.file)]
+    if args.document_id:
+        document_ids = [args.document_id]
     else:
-        pdf_paths = sorted(Path(config.paths.data_dir).glob("*.pdf"))
+        document_ids = [r.document_id for r in registry.list_all() if r.status == "processed"]
 
-    if not pdf_paths:
-        logger.warning("No PDF files found to process.")
+    if not document_ids:
+        logger.warning("No processed documents found to extract entities from.")
         return 0
 
-    succeeded = 0
-    failed = 0
-    for pdf_path in pdf_paths:
-        ok = ingest_pdf(
-            pdf_path,
-            registry,
-            vector_store,
-            ollama_client,
-            config.ollama.embedding_model,
-            config.chunking.chunk_size,
-            config.chunking.chunk_overlap,
-            config.paths.processed_dir,
-            entity_store=entity_store,
-            chat_model=config.ollama.chat_model,
+    for document_id in document_ids:
+        chunks = vector_store.get_chunks_by_document(document_id)
+        if not chunks:
+            logger.warning("No chunks found for %s, skipping.", document_id)
+            continue
+        count = extract_entities_for_document(
+            chunks, document_id, ollama_client, config.ollama.chat_model, entity_store
         )
-        succeeded += int(ok)
-        failed += int(not ok)
+        logger.info("Extracted %d entities for %s (%d chunks)", count, document_id, len(chunks))
 
-    logger.info("Done. %d succeeded, %d failed.", succeeded, failed)
-    return 0 if failed == 0 else 1
+    return 0
 
 
 if __name__ == "__main__":

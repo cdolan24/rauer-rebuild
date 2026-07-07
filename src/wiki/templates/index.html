@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Wiki - Buddharauer{% endblock %}
+{% block content %}
+<h1>Malifaux Wiki</h1>
+<p>Browse entities extracted from the ingested story documents.</p>
+{% for type, entities in by_type.items() %}
+<h2><a href="/wiki/category/{{ type }}">{{ type|capitalize }}s</a> ({{ entities|length }})</h2>
+<ul class="entity-list">
+    {% for entity in entities[:5] %}
+    <li><a href="/wiki/entity/{{ entity.id }}">{{ entity.name }}</a></li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No entities extracted yet.</p>
+{% endfor %}
+{% endblock %}
