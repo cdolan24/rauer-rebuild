@@ -94,3 +94,74 @@ def test_is_healthy_false_when_unreachable(monkeypatch):
 
     assert healthy is False
     assert models == []
+
+
+def test_chat_includes_num_predict_and_keep_alive_when_given(monkeypatch):
+    captured = {}
+
+    def _post(url, json, **kw):
+        captured.update(json)
+        return _FakeResponse({"message": {"content": "hi"}})
+
+    monkeypatch.setattr(httpx, "post", _post)
+    client = OllamaClient("http://localhost:11434")
+
+    client.chat("llama3.2", [{"role": "user", "content": "hi"}], num_predict=256, keep_alive="30m")
+
+    assert captured["options"]["num_predict"] == 256
+    assert captured["keep_alive"] == "30m"
+
+
+class _FakeStreamResponse:
+    def __init__(self, lines: list[str]) -> None:
+        self._lines = lines
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def iter_lines(self):
+        return iter(self._lines)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+def test_chat_stream_yields_fragments_in_order(monkeypatch):
+    lines = [
+        '{"message": {"content": "Hel"}, "done": false}',
+        '{"message": {"content": "lo"}, "done": false}',
+        '{"message": {"content": ""}, "done": true}',
+    ]
+    monkeypatch.setattr(httpx, "stream", lambda *a, **kw: _FakeStreamResponse(lines))
+    client = OllamaClient("http://localhost:11434")
+
+    fragments = list(client.chat_stream("llama3.2", [{"role": "user", "content": "hi"}]))
+
+    assert fragments == ["Hel", "lo"]
+
+
+def test_chat_stream_skips_blank_lines(monkeypatch):
+    lines = [
+        "",
+        '{"message": {"content": "ok"}, "done": true}',
+    ]
+    monkeypatch.setattr(httpx, "stream", lambda *a, **kw: _FakeStreamResponse(lines))
+    client = OllamaClient("http://localhost:11434")
+
+    fragments = list(client.chat_stream("llama3.2", [{"role": "user", "content": "hi"}]))
+
+    assert fragments == ["ok"]
+
+
+def test_chat_stream_raises_on_connection_error(monkeypatch):
+    def _raise(*a, **kw):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx, "stream", _raise)
+    client = OllamaClient("http://localhost:11434")
+
+    with pytest.raises(OllamaError):
+        list(client.chat_stream("llama3.2", [{"role": "user", "content": "hi"}]))

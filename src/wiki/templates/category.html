@@ -4,7 +4,7 @@
 <h1>{{ type|capitalize }}s</h1>
 <ul class="entity-list">
     {% for entity in entities %}
-    <li><a href="/wiki/entity/{{ entity.id }}">{{ entity.name }}</a> - {{ entity.description }}</li>
+    <li><a class="wiki-btn" href="/wiki/entity/{{ entity.id }}">{{ entity.name }}</a> - {{ entity.description }}</li>
     {% else %}
     <li>No entities found for this category.</li>
     {% endfor %}

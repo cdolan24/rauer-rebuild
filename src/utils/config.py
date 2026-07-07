@@ -13,6 +13,8 @@ class OllamaConfig:
     chat_model: str
     embedding_model: str
     request_timeout: float
+    num_predict: int | None
+    keep_alive: str | None
 
 
 @dataclass
@@ -99,6 +101,8 @@ def load_config(path: str | Path = "config.yaml") -> Config:
             chat_model=ollama["chat_model"],
             embedding_model=ollama["embedding_model"],
             request_timeout=float(ollama.get("request_timeout", 180.0)),
+            num_predict=int(ollama["num_predict"]) if ollama.get("num_predict") is not None else None,
+            keep_alive=ollama.get("keep_alive"),
         ),
         chunking=ChunkingConfig(
             chunk_size=int(chunking["chunk_size"]),

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
+
 import httpx
 
 
@@ -28,19 +31,28 @@ class ApiClient:
             raise ApiClientError(f"Request to {path} failed: {e}") from e
         return response.json()
 
-    def send_chat(self, message: str, conversation_id: str) -> dict:
-        return self._request(
-            "POST", "/api/chat", json={"message": message, "conversation_id": conversation_id}
-        )
+    def send_chat_stream(self, message: str, conversation_id: str) -> Iterator[dict]:
+        """Stream chat events (`token`/`done`/`error`) from `/api/chat/stream`."""
+        try:
+            with httpx.stream(
+                "POST",
+                f"{self._base_url}/api/chat/stream",
+                json={"message": message, "conversation_id": conversation_id},
+                timeout=self._timeout,
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    yield json.loads(line[len("data: ") :])
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"Request to /api/chat/stream failed: {e}") from e
 
     def list_documents(self) -> list[dict]:
         return self._request("GET", "/api/documents")["documents"]
 
     def get_document(self, document_id: str) -> dict:
         return self._request("GET", f"/api/documents/{document_id}")
-
-    def get_document_content(self, document_id: str) -> str:
-        return self._request("GET", f"/api/documents/{document_id}/content")["content"]
 
     def upload_document(self, filename: str, content: bytes, admin_password: str) -> dict:
         try:

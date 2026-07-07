@@ -11,9 +11,24 @@
         .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.85rem; text-transform: capitalize; }
         ul.entity-list { list-style: none; padding: 0; }
         ul.entity-list li { padding: 0.3rem 0; }
+        ul.entity-grid { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        ul.entity-grid li { padding: 0; }
         ul.citations { list-style: none; padding: 0; }
         ul.citations li { padding: 0.2rem 0; }
         a { color: #8b0000; }
+        .wiki-btn {
+            display: inline-block;
+            padding: 0.4rem 0.9rem;
+            background: #8b0000;
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background 0.15s ease;
+        }
+        .wiki-btn:hover { background: #b22222; color: #fff; }
+        .wiki-btn.category-btn { background: #4a4a4a; }
+        .wiki-btn.category-btn:hover { background: #6a6a6a; }
     </style>
 </head>
 <body>

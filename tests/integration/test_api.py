@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 
 import fitz
@@ -84,6 +85,41 @@ def test_chat_endpoint_returns_grounded_answer_with_sources(api_client):
     assert data["conversation_id"] == "conv-1"
     assert len(data["sources"]) == 1
     assert data["sources"][0]["document_id"] == "fellowship"
+
+
+def test_chat_stream_endpoint_yields_tokens_then_done_with_sources(api_client):
+    _seed_document(api_client)
+
+    with api_client.stream(
+        "POST", "/api/chat/stream", json={"message": "Who is Aragorn?", "conversation_id": "conv-stream"}
+    ) as response:
+        assert response.status_code == 200
+        events = [
+            json.loads(line[len("data: "):])
+            for line in response.iter_lines()
+            if line.startswith("data: ")
+        ]
+
+    token_events = [e for e in events if e["type"] == "token"]
+    done_events = [e for e in events if e["type"] == "done"]
+    assert len(token_events) > 1  # actually streamed, not one giant chunk
+    assert len(done_events) == 1
+    assert done_events[0]["sources"][0]["document_id"] == "fellowship"
+
+
+def test_chat_stream_endpoint_503_when_ollama_unavailable(unhealthy_api_client):
+    with unhealthy_api_client.stream(
+        "POST", "/api/chat/stream", json={"message": "Who is Aragorn?", "conversation_id": "conv-stream"}
+    ) as response:
+        events = [
+            json.loads(line[len("data: "):])
+            for line in response.iter_lines()
+            if line.startswith("data: ")
+        ]
+
+    assert len(events) == 1
+    assert events[0]["type"] == "error"
+    assert "Local LLM service unavailable" in events[0]["detail"]
 
 
 def test_conversation_history_roundtrip(api_client):

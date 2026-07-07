@@ -8,6 +8,13 @@ ollama:
   # must be >= frontend.request_timeout below, or the backend will give up
   # on Ollama before the frontend gives up on the backend.
   request_timeout: 180
+  # Caps how many tokens a single answer can generate - the single biggest
+  # lever on perceived response speed for local models. 512 is enough for a
+  # thorough lore answer without letting the model ramble for minutes.
+  num_predict: 512
+  # How long Ollama keeps the model loaded in memory between requests, so
+  # back-to-back questions don't pay the multi-second reload cost each time.
+  keep_alive: "30m"
 
 chunking:
   chunk_size: 800

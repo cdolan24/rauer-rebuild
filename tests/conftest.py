@@ -20,13 +20,37 @@ class FakeOllamaClient:
         digest = hashlib.sha256(text.encode("utf-8")).digest()
         return [b / 255.0 for b in digest[: self.dim]]
 
-    def chat(self, model: str, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
+    def chat(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        num_predict: int | None = None,
+        keep_alive: str | None = None,
+    ) -> str:
         if self.fail:
             from src.utils.ollama_client import OllamaError
 
             raise OllamaError("simulated chat failure")
         last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
         return f"[fake reply to: {last_user[:50]}]"
+
+    def chat_stream(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        num_predict: int | None = None,
+        keep_alive: str | None = None,
+    ):
+        if self.fail:
+            from src.utils.ollama_client import OllamaError
+
+            raise OllamaError("simulated chat failure")
+        last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        reply = f"[fake reply to: {last_user[:50]}]"
+        for word in reply.split(" "):
+            yield word + " "
 
     def is_healthy(self) -> tuple[bool, list[str]]:
         return (not self.fail), ["fake-model:latest"]

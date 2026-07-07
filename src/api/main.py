@@ -42,6 +42,8 @@ async def lifespan(app: FastAPI):
         conversation_store,
         chat_model=config.ollama.chat_model,
         min_score=config.rag_min_score,
+        num_predict=config.ollama.num_predict,
+        keep_alive=config.ollama.keep_alive,
     )
 
     app.state.config = config

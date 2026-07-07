@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 import sys
 import uuid
 from pathlib import Path
@@ -14,36 +13,68 @@ import gradio as gr
 from src.frontend.api_client import ApiAuthError, ApiClient, ApiClientError
 from src.utils.config import load_config
 
-_PAGE_MARKER_RE = re.compile(r"--- page (\d+) ---\n")
+# Gradio's multiline Textbox submits on Enter regardless of the Shift key.
+# It isn't watching keydown for this - it reacts to the native 'input' event
+# the browser fires with inputType "insertLineBreak" once Enter's default
+# newline action completes. So Shift+Enter can't just let the browser's
+# default action happen (that's the event Gradio submits on); instead we
+# preventDefault the native newline entirely and insert one ourselves via a
+# synthetic 'input' event tagged as plain text, which Svelte's binding
+# accepts as a normal edit without tripping Gradio's insertLineBreak check.
+_ENTER_TO_SEND_JS = """
+<script>
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') {
+        return;
+    }
+    const textarea = e.target.closest && e.target.closest('#message_box textarea');
+    if (!textarea) {
+        return;
+    }
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.shiftKey) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        textarea.value = textarea.value.slice(0, start) + '\\n' + textarea.value.slice(end);
+        textarea.selectionStart = textarea.selectionEnd = start + 1;
+        textarea.dispatchEvent(
+            new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: '\\n' })
+        );
+        return;
+    }
+    const wrapper = document.querySelector('#send_btn');
+    const button = wrapper && (wrapper.tagName === 'BUTTON' ? wrapper : wrapper.querySelector('button'));
+    if (button) {
+        button.click();
+    }
+}, true);
+</script>
+"""
 
 
-def _extract_page_range(content: str, page_start: int, page_end: int) -> str:
-    """Pull out just the pages a citation refers to from a document's full text."""
-    matches = list(_PAGE_MARKER_RE.finditer(content))
-    if not matches:
-        return content
-
-    sections = []
-    for i, m in enumerate(matches):
-        page_num = int(m.group(1))
-        start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
-        if page_start <= page_num <= page_end:
-            sections.append(f"--- page {page_num} ---\n{content[start:end]}")
-    return "\n".join(sections) if sections else content
+def _humanize_document_id(document_id: str) -> str:
+    return document_id.replace("_", " ").replace("-", " ").title()
 
 
 def _format_citation_label(source: dict) -> str:
+    name = _humanize_document_id(source["document_id"])
     if source["page_start"] == source["page_end"]:
         pages = f"p. {source['page_start']}"
     else:
         pages = f"pp. {source['page_start']}-{source['page_end']}"
-    return f"{source['document_id']} ({pages})"
+    return f"{name} ({pages})"
 
 
-def _pdf_link_html(api_base_url: str, document_id: str, page: int) -> str:
+def _pdf_viewer_html(api_base_url: str, document_id: str, page: int) -> str:
+    """Embed the real PDF (not the processed text) at the given page, so the
+    user reads the same document Buddharauer cites from."""
     url = f"{api_base_url}/api/documents/{document_id}/pdf#page={page}"
-    return f'<a href="{url}" target="_blank">View original PDF (page {page})</a>'
+    title = _humanize_document_id(document_id)
+    return (
+        f'<iframe src="{url}" title="{title}" width="100%" height="700" '
+        'style="border: 1px solid var(--border-color-primary, #444);"></iframe>'
+    )
 
 
 def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
@@ -54,15 +85,35 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
             return
 
         # Local LLM generation can take a while - show something immediately
-        # rather than leaving the UI looking frozen/disconnected.
+        # rather than leaving the UI looking frozen/disconnected. The first
+        # streamed token replaces this placeholder.
         thinking_history = history + [
             {"role": "user", "content": message},
             {"role": "assistant", "content": "_Thinking..._"},
         ]
         yield thinking_history, gr.update(), sources_state, ""
 
+        answer = ""
+        sources: list[dict] = []
         try:
-            result = client.send_chat(message, conversation_id)
+            for event in client.send_chat_stream(message, conversation_id):
+                event_type = event["type"]
+                if event_type == "token":
+                    answer += event["content"]
+                    streaming_history = history + [
+                        {"role": "user", "content": message},
+                        {"role": "assistant", "content": answer},
+                    ]
+                    yield streaming_history, gr.update(), sources_state, ""
+                elif event_type == "done":
+                    sources = event["sources"]
+                elif event_type == "error":
+                    error_history = history + [
+                        {"role": "user", "content": message},
+                        {"role": "assistant", "content": event["detail"]},
+                    ]
+                    yield error_history, gr.update(choices=[]), sources_state, ""
+                    return
         except ApiClientError as e:
             error_history = history + [
                 {"role": "user", "content": message},
@@ -71,33 +122,27 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
             yield error_history, gr.update(choices=[]), sources_state, ""
             return
 
-        sources = result["sources"]
         if sources:
             labels = [_format_citation_label(s) for s in sources]
-            answer = result["response"] + "\n\nSources: " + ", ".join(labels)
+            final_answer = answer + "\n\nSources: " + ", ".join(labels)
         else:
             labels = []
-            answer = result["response"]
+            final_answer = answer
 
         final_history = history + [
             {"role": "user", "content": message},
-            {"role": "assistant", "content": answer},
+            {"role": "assistant", "content": final_answer},
         ]
         yield final_history, gr.update(choices=labels, value=None), sources, ""
 
     def view_citation(citation_label, sources):
         if not citation_label or not sources:
-            return "", ""
+            return ""
         labels = [_format_citation_label(s) for s in sources]
         if citation_label not in labels:
-            return "", ""
+            return ""
         source = sources[labels.index(citation_label)]
-        pdf_link = _pdf_link_html(api_base_url, source["document_id"], source["page_start"])
-        try:
-            content = client.get_document_content(source["document_id"])
-        except ApiClientError as e:
-            return f"Could not load document: {e}", pdf_link
-        return _extract_page_range(content, source["page_start"], source["page_end"]), pdf_link
+        return _pdf_viewer_html(api_base_url, source["document_id"], source["page_start"])
 
     def refresh_documents():
         try:
@@ -111,13 +156,9 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
 
     def view_selected_document(doc_choice):
         if not doc_choice:
-            return "", ""
+            return ""
         document_id = doc_choice.split(" (")[0]
-        pdf_link = _pdf_link_html(api_base_url, document_id, 1)
-        try:
-            return client.get_document_content(document_id), pdf_link
-        except ApiClientError as e:
-            return f"Could not load document: {e}", pdf_link
+        return _pdf_viewer_html(api_base_url, document_id, 1)
 
     def upload_document(file, admin_password):
         if file is None:
@@ -146,7 +187,7 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
             return gr.update(visible=False), "Incorrect admin password.", None
         return gr.update(visible=True), "Unlocked.", password
 
-    with gr.Blocks(title="Buddharauer") as demo:
+    with gr.Blocks(title="Buddharauer", head=_ENTER_TO_SEND_JS) as demo:
         conversation_id = gr.State(str(uuid.uuid4()))
         sources_state = gr.State([])
 
@@ -156,12 +197,20 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
         with gr.Row():
             with gr.Column(scale=1):
                 chatbot = gr.Chatbot(label="Chat", height=500, type="messages")
-                message_box = gr.Textbox(label="Ask a question", placeholder="Who is...?", lines=2)
+                message_box = gr.Textbox(
+                    label="Ask a question",
+                    placeholder="Who is...? (Enter to send, Shift+Enter for a new line)",
+                    lines=2,
+                    elem_id="message_box",
+                )
                 with gr.Row():
-                    send_btn = gr.Button("Send", variant="primary")
+                    send_btn = gr.Button("Send", variant="primary", elem_id="send_btn")
                     clear_btn = gr.Button("Clear chat")
-                citation_dropdown = gr.Dropdown(
-                    label="Citations from last answer", choices=[], interactive=True
+                citation_radio = gr.Radio(
+                    label="Citations from last answer",
+                    choices=[],
+                    interactive=True,
+                    elem_id="citation_radio",
                 )
 
             with gr.Column(scale=1):
@@ -169,32 +218,27 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
                 doc_dropdown = gr.Dropdown(label="Select document", choices=[], interactive=True)
                 refresh_btn = gr.Button("Refresh document list")
                 status_text = gr.Markdown("")
-                pdf_link_html = gr.HTML("")
-                doc_viewer = gr.Textbox(label="Content", lines=25, interactive=False)
+                doc_viewer = gr.HTML("Select a document or citation to view its PDF here.")
 
         send_btn.click(
             send_message,
             inputs=[message_box, chatbot, conversation_id, sources_state],
-            outputs=[chatbot, citation_dropdown, sources_state, message_box],
+            outputs=[chatbot, citation_radio, sources_state, message_box],
         )
         message_box.submit(
             send_message,
             inputs=[message_box, chatbot, conversation_id, sources_state],
-            outputs=[chatbot, citation_dropdown, sources_state, message_box],
+            outputs=[chatbot, citation_radio, sources_state, message_box],
         )
         clear_btn.click(
             lambda: ([], gr.update(choices=[]), []),
-            outputs=[chatbot, citation_dropdown, sources_state],
+            outputs=[chatbot, citation_radio, sources_state],
         )
 
-        citation_dropdown.change(
-            view_citation, inputs=[citation_dropdown, sources_state], outputs=[doc_viewer, pdf_link_html]
-        )
+        citation_radio.change(view_citation, inputs=[citation_radio, sources_state], outputs=[doc_viewer])
 
         refresh_btn.click(refresh_documents, outputs=[doc_dropdown, status_text])
-        doc_dropdown.change(
-            view_selected_document, inputs=[doc_dropdown], outputs=[doc_viewer, pdf_link_html]
-        )
+        doc_dropdown.change(view_selected_document, inputs=[doc_dropdown], outputs=[doc_viewer])
 
         demo.load(refresh_documents, outputs=[doc_dropdown, status_text])
 

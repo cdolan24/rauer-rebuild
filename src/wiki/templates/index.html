@@ -4,10 +4,10 @@
 <h1>Malifaux Wiki</h1>
 <p>Browse entities extracted from the ingested story documents.</p>
 {% for type, entities in by_type.items() %}
-<h2><a href="/wiki/category/{{ type }}">{{ type|capitalize }}s</a> ({{ entities|length }})</h2>
-<ul class="entity-list">
+<h2><a class="wiki-btn category-btn" href="/wiki/category/{{ type }}">{{ type|capitalize }}s</a> ({{ entities|length }})</h2>
+<ul class="entity-grid">
     {% for entity in entities[:5] %}
-    <li><a href="/wiki/entity/{{ entity.id }}">{{ entity.name }}</a></li>
+    <li><a class="wiki-btn" href="/wiki/entity/{{ entity.id }}">{{ entity.name }}</a></li>
     {% endfor %}
 </ul>
 {% else %}
