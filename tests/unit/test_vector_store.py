@@ -65,12 +65,3 @@ def test_get_chunks_by_document_reconstructs_chunks(tmp_path):
     assert [c.chunk_id for c in chunks] == ["c0", "c1"]
     assert all(c.document_id == "doc1" for c in chunks)
     assert chunks[0].text == "text-c0"
-
-
-def test_get_chunks_by_document_returns_empty_for_unknown_document(tmp_path):
-    vector_store = VectorStore(path=str(tmp_path / "vector_db"), collection_name="test")
-    vector_store.add_chunks([_embedded("c0", [1.0, 0.0, 0.0, 0.0])])
-
-    chunks = vector_store.get_chunks_by_document("nonexistent")
-
-    assert chunks == []

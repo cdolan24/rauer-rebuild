@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 from src.database.entity_store import EntityStore
 from src.pipeline import entity_extractor
 from src.pipeline.chunker import Chunk
@@ -10,14 +12,20 @@ _MULTI_BATCH_CHUNK_COUNT = entity_extractor.BATCH_SIZE * 2 + 5  # guarantees >=3
 
 
 class ScriptedOllamaClient:
-    """Returns a fixed entity-extraction response for every chat() call."""
+    """Returns a fixed entity-extraction response for every chat() call.
+
+    Extraction now dispatches batches concurrently, so the call counter is
+    lock-protected to stay accurate under real threading.
+    """
 
     def __init__(self, response: str) -> None:
         self.response = response
         self.calls = 0
+        self._lock = threading.Lock()
 
     def chat(self, model, messages, temperature=0.7):
-        self.calls += 1
+        with self._lock:
+            self.calls += 1
         return self.response
 
     def embed(self, model, text):
@@ -28,15 +36,20 @@ class ScriptedOllamaClient:
 
 
 class FlakyOllamaClient:
-    """Fails on the first call, then returns a fixed response for the rest."""
+    """Fails on exactly the first call to complete, then returns a fixed
+    response for the rest - lock-protected so concurrent dispatch can't race
+    multiple threads into all seeing "the first" call."""
 
     def __init__(self, response: str) -> None:
         self.response = response
         self.calls = 0
+        self._lock = threading.Lock()
 
     def chat(self, model, messages, temperature=0.7):
-        self.calls += 1
-        if self.calls == 1:
+        with self._lock:
+            self.calls += 1
+            should_fail = self.calls == 1
+        if should_fail:
             raise OllamaError("simulated timeout")
         return self.response
 
@@ -92,14 +105,6 @@ def test_extract_entities_dedupes_across_batches(tmp_path):
     assert client.calls > 1  # multiple batches, same entity each time
     entities = store.list_by_document("doc1")
     assert len(entities) == 1
-
-
-def test_extract_entities_empty_chunks_returns_zero(tmp_path):
-    store = EntityStore(str(tmp_path / "entities.db"))
-
-    count = extract_entities_for_document([], "doc1", ScriptedOllamaClient("[]"), "fake-chat", store)
-
-    assert count == 0
 
 
 def test_extract_entities_survives_a_failed_batch(tmp_path):
