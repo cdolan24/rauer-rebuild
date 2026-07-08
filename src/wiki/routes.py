@@ -13,20 +13,38 @@ router = APIRouter(tags=["wiki"])
 _templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
+def _category_counts(entity_store) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for entity in entity_store.list_all():
+        counts[entity.type] = counts.get(entity.type, 0) + 1
+    return counts
+
+
+def _humanize_document_id(document_id: str) -> str:
+    return document_id.replace("_", " ").replace("-", " ").title()
+
+
 @router.get("/wiki", response_class=HTMLResponse)
 def wiki_index(request: Request) -> HTMLResponse:
     entity_store = request.app.state.entity_store
     by_type: dict[str, list] = {}
     for entity in entity_store.list_all():
         by_type.setdefault(entity.type, []).append(entity)
-    return _templates.TemplateResponse(request, "index.html", {"by_type": by_type})
+    category_counts = {type_: len(entities) for type_, entities in by_type.items()}
+    return _templates.TemplateResponse(
+        request, "index.html", {"by_type": by_type, "category_counts": category_counts}
+    )
 
 
 @router.get("/wiki/category/{type_}", response_class=HTMLResponse)
 def wiki_category(type_: str, request: Request) -> HTMLResponse:
     entity_store = request.app.state.entity_store
     entities = entity_store.list_by_type(type_)
-    return _templates.TemplateResponse(request, "category.html", {"type": type_, "entities": entities})
+    return _templates.TemplateResponse(
+        request,
+        "category.html",
+        {"type": type_, "entities": entities, "category_counts": _category_counts(entity_store)},
+    )
 
 
 @router.get("/wiki/entity/{entity_id}", response_class=HTMLResponse)
@@ -45,4 +63,15 @@ def wiki_entity(entity_id: int, request: Request) -> HTMLResponse:
         entity_store.set_summary(entity.id, summary)
         entity = entity_store.get(entity.id)
 
-    return _templates.TemplateResponse(request, "entity.html", {"entity": entity, "mentions": mentions})
+    documents = sorted({_humanize_document_id(m.document_id) for m in mentions})
+
+    return _templates.TemplateResponse(
+        request,
+        "entity.html",
+        {
+            "entity": entity,
+            "mentions": mentions,
+            "documents": documents,
+            "category_counts": _category_counts(entity_store),
+        },
+    )

@@ -83,6 +83,53 @@ def test_multi_turn_conversation_passes_prior_history(tmp_path, fake_ollama_clie
     assert any("Who is Aragorn?" in c for c in contents)
 
 
+def test_history_beyond_max_turns_is_dropped(tmp_path, fake_ollama_client):
+    vector_store = _seeded_vector_store(tmp_path, fake_ollama_client)
+    retriever = Retriever(vector_store, fake_ollama_client, embedding_model="fake-embed")
+    capturing_client = CapturingOllamaClient(fake_ollama_client)
+    engine = ChatEngine(
+        retriever,
+        capturing_client,
+        ConversationStore(),
+        chat_model="fake-chat",
+        min_score=0.0,
+        max_history_turns=2,
+    )
+
+    engine.ask("conv-1", "First question?")
+    engine.ask("conv-1", "Second question?")
+    engine.ask("conv-1", "Third question?")
+    engine.ask("conv-1", "Fourth question?")
+
+    # By the 4th call, 3 turns of history exist (turns 1-3); capped at 2, only
+    # the most recent 2 (turns 2-3) should be resent.
+    last_call_messages = capturing_client.chat_calls[-1]
+    contents = [m["content"] for m in last_call_messages]
+    assert not any("First question?" in c for c in contents)
+    assert any("Third question?" in c for c in contents)
+
+
+def test_history_within_max_turns_is_unaffected(tmp_path, fake_ollama_client):
+    vector_store = _seeded_vector_store(tmp_path, fake_ollama_client)
+    retriever = Retriever(vector_store, fake_ollama_client, embedding_model="fake-embed")
+    capturing_client = CapturingOllamaClient(fake_ollama_client)
+    engine = ChatEngine(
+        retriever,
+        capturing_client,
+        ConversationStore(),
+        chat_model="fake-chat",
+        min_score=0.0,
+        max_history_turns=5,
+    )
+
+    engine.ask("conv-1", "First question?")
+    engine.ask("conv-1", "Second question?")
+
+    last_call_messages = capturing_client.chat_calls[-1]
+    contents = [m["content"] for m in last_call_messages]
+    assert any("First question?" in c for c in contents)
+
+
 def test_ask_stream_yields_fragments_then_final_response_with_citations(tmp_path, fake_ollama_client):
     vector_store = _seeded_vector_store(tmp_path, fake_ollama_client)
     retriever = Retriever(vector_store, fake_ollama_client, embedding_model="fake-embed")

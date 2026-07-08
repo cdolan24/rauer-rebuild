@@ -162,6 +162,8 @@ def test_get_document_pdf_serves_the_real_file(api_client, tmp_path):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content == pdf_path.read_bytes()
+    # Must render inline (in the frontend's iframe viewer), not force a download.
+    assert response.headers["content-disposition"].startswith("inline")
 
 
 def test_get_document_pdf_404_for_unknown_document(api_client):

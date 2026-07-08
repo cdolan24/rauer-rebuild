@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <title>{% block title %}Buddharauer Wiki{% endblock %}</title>
     <style>
-        body { font-family: Georgia, serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-        nav { margin-bottom: 2rem; border-bottom: 2px solid #8b0000; padding-bottom: 0.5rem; }
-        nav a { margin-right: 1rem; text-decoration: none; color: #8b0000; font-weight: bold; }
+        body { font-family: Georgia, serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+        .topnav { margin-bottom: 1.5rem; border-bottom: 2px solid #8b0000; padding-bottom: 0.5rem; }
+        .topnav a { margin-right: 1rem; text-decoration: none; color: #8b0000; font-weight: bold; }
         h1 { border-bottom: 1px solid #ccc; padding-bottom: 0.3rem; }
         .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.85rem; text-transform: capitalize; }
         ul.entity-list { list-style: none; padding: 0; }
@@ -29,13 +29,82 @@
         .wiki-btn:hover { background: #b22222; color: #fff; }
         .wiki-btn.category-btn { background: #4a4a4a; }
         .wiki-btn.category-btn:hover { background: #6a6a6a; }
+
+        /* Sidebar + main content layout */
+        .wiki-layout { display: flex; gap: 2rem; align-items: flex-start; }
+        .wiki-sidebar {
+            flex: 0 0 220px;
+            position: sticky;
+            top: 1rem;
+        }
+        .wiki-sidebar h3 { margin-top: 1.2rem; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.03em; color: #666; border: none; }
+        .wiki-sidebar ul { list-style: none; padding: 0; margin: 0.4rem 0; }
+        .wiki-sidebar li { padding: 0.25rem 0; }
+        .wiki-sidebar .count { color: #888; font-size: 0.85rem; }
+        #wiki-search {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0.5rem 0.6rem;
+            font-family: inherit;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        .wiki-main { flex: 1; min-width: 0; }
+
+        /* Breadcrumbs */
+        .breadcrumb { margin-bottom: 1rem; font-size: 0.9rem; color: #666; }
+        .breadcrumb a { color: #8b0000; text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+
+        /* Entity page infobox */
+        .entity-page { display: flex; gap: 2rem; align-items: flex-start; }
+        .entity-body { flex: 1; min-width: 0; }
+        .infobox {
+            flex: 0 0 240px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 1rem;
+            background: #faf7f2;
+        }
+        .infobox h3 { margin-top: 0; border: none; }
+        .infobox dt { font-weight: bold; font-size: 0.85rem; text-transform: uppercase; color: #666; margin-top: 0.7rem; }
+        .infobox dd { margin: 0.2rem 0 0 0; }
+        .infobox ul { list-style: none; padding: 0; margin: 0; }
     </style>
 </head>
 <body>
-    <nav>
+    <nav class="topnav">
         <a href="/wiki">Wiki Home</a>
         <a href="/">Chat</a>
     </nav>
-    {% block content %}{% endblock %}
+    <div class="wiki-layout">
+        <aside class="wiki-sidebar">
+            <input type="text" id="wiki-search" placeholder="Search entities...">
+            <h3>Categories</h3>
+            <ul>
+                {% for cat, count in category_counts.items() %}
+                <li><a href="/wiki/category/{{ cat }}">{{ cat|capitalize }}s</a> <span class="count">({{ count }})</span></li>
+                {% else %}
+                <li>No categories yet.</li>
+                {% endfor %}
+            </ul>
+        </aside>
+        <main class="wiki-main">
+            {% block breadcrumb %}{% endblock %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <script>
+        document.addEventListener('input', function (e) {
+            if (e.target.id !== 'wiki-search') {
+                return;
+            }
+            const query = e.target.value.trim().toLowerCase();
+            document.querySelectorAll('.entity-grid li, .entity-list li').forEach(function (li) {
+                const text = li.textContent.toLowerCase();
+                li.style.display = (!query || text.includes(query)) ? '' : 'none';
+            });
+        });
+    </script>
 </body>
 </html>

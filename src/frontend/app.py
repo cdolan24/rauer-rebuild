@@ -11,7 +11,7 @@ if __name__ == "__main__":
 import gradio as gr
 
 from src.frontend.api_client import ApiAuthError, ApiClient, ApiClientError
-from src.utils.config import load_config
+from src.utils.config import get_config_path, load_config
 
 # Gradio's multiline Textbox submits on Enter regardless of the Shift key.
 # It isn't watching keydown for this - it reacts to the native 'input' event
@@ -275,7 +275,7 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
 
 
 def main() -> None:
-    config = load_config()
+    config = load_config(get_config_path())
     client = ApiClient(config.frontend.api_base_url, timeout=config.frontend.request_timeout)
     demo = build_app(client, config.frontend.api_base_url)
     demo.launch(server_port=config.frontend.port)

@@ -60,6 +60,7 @@ class Config:
     frontend: FrontendConfig
     log_level: str
     rag_min_score: float
+    rag_max_history_turns: int
     admin_password: str | None
 
 
@@ -129,6 +130,7 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         ),
         log_level=raw.get("logging", {}).get("level", "INFO"),
         rag_min_score=float(raw.get("rag", {}).get("min_score", 0.55)),
+        rag_max_history_turns=int(raw.get("rag", {}).get("max_history_turns", 3)),
         admin_password=_resolve_admin_password(raw.get("auth", {}).get("admin_password")),
     )
 

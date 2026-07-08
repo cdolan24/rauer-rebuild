@@ -54,6 +54,12 @@ rag:
   # back to "I don't have information about that." Tuned empirically against
   # nomic-embed-text: relevant matches scored ~0.6-0.7, irrelevant ~0.45-0.5.
   min_score: 0.55
+  # Caps how many prior conversation turns are resent to the model each
+  # request. On CPU-bound Ollama installs, prompt evaluation time scales with
+  # context size, so an unbounded history makes long conversations get slower
+  # every turn. Retrieval (and therefore answer grounding) is unaffected -
+  # this only trims how much *prior chat* is replayed back to the model.
+  max_history_turns: 3
 
 auth:
   # Required to enable PDF upload. Left as "changeme" (or unset), uploads are

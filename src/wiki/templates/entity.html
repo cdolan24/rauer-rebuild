@@ -1,14 +1,44 @@
 {% extends "base.html" %}
 {% block title %}{{ entity.name }} - Buddharauer Wiki{% endblock %}
+{% block breadcrumb %}
+<nav class="breadcrumb">
+    <a href="/wiki">Wiki Home</a> &gt;
+    <a href="/wiki/category/{{ entity.type }}">{{ entity.type|capitalize }}s</a> &gt;
+    {{ entity.name }}
+</nav>
+{% endblock %}
 {% block content %}
-<h1>{{ entity.name }} <span class="badge">{{ entity.type }}</span></h1>
-<p>{{ entity.summary or entity.description }}</p>
-<h2>Mentioned In</h2>
-<ul class="citations">
-    {% for mention in mentions %}
-    <li><a href="/api/documents/{{ mention.document_id }}/pdf#page={{ mention.page_start }}" target="_blank">{{ mention.document_id }}, p. {{ mention.page_start }}{% if mention.page_end != mention.page_start %}-{{ mention.page_end }}{% endif %}</a></li>
-    {% else %}
-    <li>No mentions indexed.</li>
-    {% endfor %}
-</ul>
+<div class="entity-page">
+    <div class="entity-body">
+        <h1>{{ entity.name }} <span class="badge">{{ entity.type }}</span></h1>
+        <p>{{ entity.summary or entity.description }}</p>
+        <h2>Mentioned In</h2>
+        <ul class="citations">
+            {% for mention in mentions %}
+            <li><a href="/api/documents/{{ mention.document_id }}/pdf#page={{ mention.page_start }}" target="_blank">{{ mention.document_id }}, p. {{ mention.page_start }}{% if mention.page_end != mention.page_start %}-{{ mention.page_end }}{% endif %}</a></li>
+            {% else %}
+            <li>No mentions indexed.</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <aside class="infobox">
+        <h3>{{ entity.name }}</h3>
+        <dl>
+            <dt>Type</dt>
+            <dd>{{ entity.type|capitalize }}</dd>
+            <dt>Mentions</dt>
+            <dd>{{ mentions|length }}</dd>
+            <dt>Appears In</dt>
+            <dd>
+                <ul>
+                    {% for doc in documents %}
+                    <li>{{ doc }}</li>
+                    {% else %}
+                    <li>Unknown</li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </dl>
+    </aside>
+</div>
 {% endblock %}

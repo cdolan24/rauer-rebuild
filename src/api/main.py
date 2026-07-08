@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
         min_score=config.rag_min_score,
         num_predict=config.ollama.num_predict,
         keep_alive=config.ollama.keep_alive,
+        max_history_turns=config.rag_max_history_turns,
     )
 
     app.state.config = config

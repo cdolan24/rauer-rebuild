@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ type|capitalize }}s - Buddharauer Wiki{% endblock %}
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="/wiki">Wiki Home</a> &gt; {{ type|capitalize }}s</nav>
+{% endblock %}
 {% block content %}
 <h1>{{ type|capitalize }}s</h1>
 <ul class="entity-list">

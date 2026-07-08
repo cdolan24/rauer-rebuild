@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from src.rag.conversation_store import ConversationStore
+from src.rag.conversation_store import ConversationStore, ConversationTurn
 from src.rag.prompt_builder import build_messages
 from src.rag.retriever import Retriever
 from src.utils.ollama_client import OllamaClient
@@ -42,6 +42,7 @@ class ChatEngine:
         min_score: float = 0.55,
         num_predict: int | None = None,
         keep_alive: str | None = None,
+        max_history_turns: int = 3,
     ) -> None:
         self._retriever = retriever
         self._ollama_client = ollama_client
@@ -51,9 +52,16 @@ class ChatEngine:
         self._min_score = min_score
         self._num_predict = num_predict
         self._keep_alive = keep_alive
+        self._max_history_turns = max_history_turns
+
+    def _bounded_history(self, conversation_id: str) -> list[ConversationTurn]:
+        history = self._conversation_store.get_history(conversation_id)
+        if self._max_history_turns <= 0:
+            return history
+        return history[-self._max_history_turns :]
 
     def ask(self, conversation_id: str, question: str) -> ChatResponse:
-        history = self._conversation_store.get_history(conversation_id)
+        history = self._bounded_history(conversation_id)
         results = self._retriever.retrieve(question, top_k=self._top_k)
         relevant = [r for r in results if r.score >= self._min_score]
 
@@ -84,7 +92,7 @@ class ChatEngine:
         text fragments as they're generated, followed by a final `ChatResponse`
         carrying the full answer and citations. The "no information" fallback
         is yielded as a single fragment (nothing to stream token-by-token)."""
-        history = self._conversation_store.get_history(conversation_id)
+        history = self._bounded_history(conversation_id)
         results = self._retriever.retrieve(question, top_k=self._top_k)
         relevant = [r for r in results if r.score >= self._min_score]
 

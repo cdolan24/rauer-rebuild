@@ -75,7 +75,12 @@ def get_document_pdf(document_id: str, request: Request) -> FileResponse:
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail=f"Original PDF for '{document_id}' not found on disk")
 
-    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=pdf_path.name,
+        content_disposition_type="inline",
+    )
 
 
 @router.post("/documents/upload", response_model=UploadResponse, status_code=202)
