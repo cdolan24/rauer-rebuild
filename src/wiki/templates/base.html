@@ -3,105 +3,149 @@
 <head>
     <meta charset="utf-8">
     <title>{% block title %}Buddharauer Wiki{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Georgia, serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-        .topnav { margin-bottom: 1.5rem; border-bottom: 2px solid #8b0000; padding-bottom: 0.5rem; }
-        .topnav a { margin-right: 1rem; text-decoration: none; color: #8b0000; font-weight: bold; }
-        h1 { border-bottom: 1px solid #ccc; padding-bottom: 0.3rem; }
-        .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.85rem; text-transform: capitalize; }
+        :root {
+            --ink: #e8e0d5;
+            --muted: #948a7c;
+            --bg: #100d0f;
+            --surface: #1c1719;
+            --border: #2f2529;
+            --crimson: #b8283f;
+            --crimson-bright: #d63a54;
+            --gold: #c9a227;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "EB Garamond", Georgia, serif;
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 0 1.5rem 3rem;
+            color: var(--ink);
+            background: var(--bg);
+            line-height: 1.7;
+            font-size: 1.08rem;
+        }
+        h1, h2, h3 { font-family: "Cinzel", Georgia, serif; letter-spacing: 0.02em; color: var(--gold); }
+        h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.6rem; margin-bottom: 0.6rem; }
+        h2 { font-size: 1.25rem; margin-top: 2rem; }
+        .badge { display: inline-block; background: #241c1f; border: 1px solid var(--crimson); color: var(--crimson-bright); border-radius: 3px; padding: 0.15rem 0.6rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
         ul.entity-list { list-style: none; padding: 0; }
-        ul.entity-list li { padding: 0.3rem 0; }
-        ul.entity-grid { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        ul.entity-list li { padding: 0.35rem 0; }
+        ul.entity-grid { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
         ul.entity-grid li { padding: 0; }
         ul.citations { list-style: none; padding: 0; }
-        ul.citations li { padding: 0.2rem 0; }
-        a { color: #8b0000; }
+        ul.citations li { padding: 0.25rem 0; }
+        a { color: var(--crimson-bright); }
+        a:hover { color: var(--gold); }
+
         .wiki-btn {
             display: inline-block;
-            padding: 0.4rem 0.9rem;
-            background: #8b0000;
-            color: #fff;
-            border-radius: 6px;
+            padding: 0.45rem 1rem;
+            background: #241c1f;
+            border: 1px solid var(--crimson);
+            color: var(--ink);
+            border-radius: 3px;
             text-decoration: none;
-            font-weight: bold;
-            transition: background 0.15s ease;
+            font-weight: 500;
+            font-size: 0.92rem;
+            transition: all 0.15s ease;
         }
-        .wiki-btn:hover { background: #b22222; color: #fff; }
+        .wiki-btn:hover { background: var(--crimson); color: #100d0f; border-color: var(--crimson-bright); }
 
-        /* Per-type entity colors, so different kinds of entities are
-           distinguishable at a glance instead of one bright red for
-           everything. real-person is deliberately muted - it's meta/credits
-           content, not story cast. */
-        .wiki-btn.type-character { background: #8b0000; }
-        .wiki-btn.type-character:hover { background: #b22222; }
-        .wiki-btn.type-creature { background: #5b3a7e; }
-        .wiki-btn.type-creature:hover { background: #7a55a3; }
-        .wiki-btn.type-faction { background: #4a4a4a; }
-        .wiki-btn.type-faction:hover { background: #6a6a6a; }
-        .wiki-btn.type-item { background: #96731a; }
-        .wiki-btn.type-item:hover { background: #b78d24; }
-        .wiki-btn.type-location { background: #1f6f78; }
-        .wiki-btn.type-location:hover { background: #2b909b; }
-        .wiki-btn.type-event { background: #a35a1f; }
-        .wiki-btn.type-event:hover { background: #c47029; }
-        .wiki-btn.type-real-person { background: #8a8577; }
-        .wiki-btn.type-real-person:hover { background: #a19c8c; }
-        .wiki-btn.type-other { background: #6b7280; }
-        .wiki-btn.type-other:hover { background: #868c96; }
+        /* Per-type entity colors - each its own border/glow hue on a
+           uniform dark card, rather than a solid fill, to keep the page
+           from feeling noisy while still being distinguishable. */
+        .wiki-btn.type-character { border-color: var(--crimson); }
+        .wiki-btn.type-character:hover { background: var(--crimson); color: #100d0f; }
+        .wiki-btn.type-creature { border-color: #8b5cf6; color: #c4aefc; }
+        .wiki-btn.type-creature:hover { background: #8b5cf6; color: #100d0f; }
+        .wiki-btn.type-faction { border-color: #6b7280; color: #c3c8d0; }
+        .wiki-btn.type-faction:hover { background: #6b7280; color: #100d0f; }
+        .wiki-btn.type-item { border-color: var(--gold); color: var(--gold); }
+        .wiki-btn.type-item:hover { background: var(--gold); color: #100d0f; }
+        .wiki-btn.type-location { border-color: #2b8a8f; color: #7dd3d8; }
+        .wiki-btn.type-location:hover { background: #2b8a8f; color: #100d0f; }
+        .wiki-btn.type-event { border-color: #c2660e; color: #f0a35f; }
+        .wiki-btn.type-event:hover { background: #c2660e; color: #100d0f; }
+        .wiki-btn.type-real-person { border-color: #55504a; color: var(--muted); }
+        .wiki-btn.type-real-person:hover { background: #55504a; color: var(--ink); }
+        .wiki-btn.type-other { border-color: #4b5563; color: #9ca3af; }
+        .wiki-btn.type-other:hover { background: #4b5563; color: var(--ink); }
+
+        /* Top nav */
+        .topnav {
+            padding: 1.2rem 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2rem;
+        }
+        .topnav a { text-decoration: none; color: var(--gold); font-weight: 600; margin-right: 1.8rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; font-family: "Cinzel", serif; }
+        .topnav a:hover { color: var(--crimson-bright); }
 
         /* Sidebar + main content layout */
-        .wiki-layout { display: flex; gap: 2rem; align-items: flex-start; }
+        .wiki-layout { display: flex; gap: 2.5rem; align-items: flex-start; }
         .wiki-sidebar {
             flex: 0 0 220px;
             position: sticky;
-            top: 1rem;
+            top: 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1.2rem;
         }
-        .wiki-sidebar h3 { margin-top: 1.2rem; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.03em; color: #666; border: none; }
-        .wiki-sidebar ul { list-style: none; padding: 0; margin: 0.4rem 0; }
-        .wiki-sidebar li { padding: 0.25rem 0; }
-        .wiki-sidebar .count { color: #888; font-size: 0.85rem; }
+        .wiki-sidebar h3 { margin-top: 1.2rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border: none; font-family: "Cinzel", serif; }
+        .wiki-sidebar ul { list-style: none; padding: 0; margin: 0.5rem 0; }
+        .wiki-sidebar li { padding: 0.3rem 0; border-bottom: 1px solid rgba(184, 40, 63, 0.1); }
+        .wiki-sidebar li:last-child { border-bottom: none; }
+        .wiki-sidebar .count { color: var(--muted); font-size: 0.82rem; }
         #wiki-search {
             width: 100%;
             box-sizing: border-box;
-            padding: 0.5rem 0.6rem;
+            padding: 0.6rem 0.7rem;
             font-family: inherit;
-            border: 1px solid #ccc;
-            border-radius: 6px;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg);
+            color: var(--ink);
         }
+        #wiki-search::placeholder { color: var(--muted); }
+        #wiki-search:focus { outline: 1px solid var(--crimson); }
         .wiki-main { flex: 1; min-width: 0; }
 
         /* Breadcrumbs */
-        .breadcrumb { margin-bottom: 1rem; font-size: 0.9rem; color: #666; }
-        .breadcrumb a { color: #8b0000; text-decoration: none; }
-        .breadcrumb a:hover { text-decoration: underline; }
+        .breadcrumb { margin-bottom: 1.2rem; font-size: 0.85rem; color: var(--muted); font-style: italic; }
+        .breadcrumb a { color: var(--muted); }
+        .breadcrumb a:hover { color: var(--crimson-bright); }
 
         /* Wiki landing page stats */
         .wiki-stats {
             display: flex;
             flex-wrap: wrap;
-            gap: 1.5rem;
-            margin: 1.5rem 0;
-            padding: 1rem 0;
-            border-top: 1px solid #eee;
-            border-bottom: 1px solid #eee;
+            gap: 1.8rem;
+            margin: 1.8rem 0;
+            padding: 1.4rem 0;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
         }
-        .wiki-stats .stat { text-align: center; min-width: 80px; }
-        .wiki-stats .stat strong { display: block; font-size: 1.6rem; color: #8b0000; }
-        .wiki-stats .stat span { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: #666; }
+        .wiki-stats .stat { text-align: center; min-width: 90px; }
+        .wiki-stats .stat strong { display: block; font-family: "Cinzel", serif; font-size: 1.7rem; color: var(--gold); }
+        .wiki-stats .stat span { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 
         /* Entity page infobox */
-        .entity-page { display: flex; gap: 2rem; align-items: flex-start; }
+        .entity-page { display: flex; gap: 2.5rem; align-items: flex-start; }
         .entity-body { flex: 1; min-width: 0; }
         .infobox {
-            flex: 0 0 240px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            padding: 1rem;
-            background: #faf7f2;
+            flex: 0 0 250px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1.2rem;
+            background: var(--surface);
+            box-shadow: 0 0 24px rgba(184, 40, 63, 0.08);
         }
-        .infobox h3 { margin-top: 0; border: none; }
-        .infobox dt { font-weight: bold; font-size: 0.85rem; text-transform: uppercase; color: #666; margin-top: 0.7rem; }
-        .infobox dd { margin: 0.2rem 0 0 0; }
+        .infobox h3 { margin-top: 0; border: none; font-size: 1.15rem; }
+        .infobox dt { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gold); margin-top: 0.8rem; font-family: "Cinzel", serif; }
+        .infobox dd { margin: 0.25rem 0 0 0; }
         .infobox ul { list-style: none; padding: 0; margin: 0; }
     </style>
 </head>
