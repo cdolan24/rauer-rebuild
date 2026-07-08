@@ -73,6 +73,33 @@ def test_set_type(tmp_path):
     assert entity.type == "real-person"
 
 
+def test_merge_entities_reassigns_mentions_and_deletes_duplicates(tmp_path):
+    store = EntityStore(str(tmp_path / "entities.db"))
+    keep_id = store.add_entity("doc1", "Molly Squidpiddge", "character", "An undead woman.")
+    dup_id = store.add_entity("doc1", "Molly-girl", "character", "")
+    store.add_mentions(
+        [EntityMention(entity_id=dup_id, chunk_id="c0", document_id="doc1", page_start=5, page_end=5)]
+    )
+    store.set_summary(keep_id, "stale cached summary")
+
+    store.merge_entities(keep_id, [dup_id])
+
+    assert store.get(dup_id) is None
+    kept = store.get(keep_id)
+    assert kept.summary is None  # cleared so it regenerates against the new mention set
+    mentions = store.get_mentions(keep_id)
+    assert [m.chunk_id for m in mentions] == ["c0"]
+
+
+def test_merge_entities_no_op_with_empty_list(tmp_path):
+    store = EntityStore(str(tmp_path / "entities.db"))
+    keep_id = store.add_entity("doc1", "Lady Justice", "character", "desc")
+
+    store.merge_entities(keep_id, [])
+
+    assert store.get(keep_id) is not None
+
+
 def test_list_all_orders_by_type_then_name(tmp_path):
     store = EntityStore(str(tmp_path / "entities.db"))
     store.add_entity("doc1", "Bree", "location", "desc")

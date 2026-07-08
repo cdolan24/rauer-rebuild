@@ -188,7 +188,10 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
         return gr.update(visible=True), "Unlocked.", password
 
     with gr.Blocks(title="Buddharauer", head=_ENTER_TO_SEND_JS) as demo:
-        conversation_id = gr.State(str(uuid.uuid4()))
+        # A callable default is invoked fresh per browser session by Gradio -
+        # a plain str(uuid.uuid4()) would be computed once at app-build time
+        # and shared by every visitor.
+        conversation_id = gr.State(lambda: str(uuid.uuid4()))
         sources_state = gr.State([])
 
         gr.Markdown("# Buddharauer - Malifaux Document Explorer")

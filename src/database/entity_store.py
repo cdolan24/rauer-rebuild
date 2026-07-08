@@ -88,6 +88,22 @@ class EntityStore:
             conn.execute("UPDATE entities SET type = ? WHERE id = ?", (type_, entity_id))
             conn.commit()
 
+    def merge_entities(self, keep_id: int, merge_ids: list[int]) -> None:
+        """Consolidate duplicate entities onto `keep_id`: reassign all of
+        their mentions, delete the duplicate rows, and clear `keep_id`'s
+        cached summary since its mention set just changed."""
+        if not merge_ids:
+            return
+        with closing(self._connect()) as conn:
+            placeholders = ",".join("?" * len(merge_ids))
+            conn.execute(
+                f"UPDATE entity_mentions SET entity_id = ? WHERE entity_id IN ({placeholders})",
+                (keep_id, *merge_ids),
+            )
+            conn.execute(f"DELETE FROM entities WHERE id IN ({placeholders})", merge_ids)
+            conn.execute("UPDATE entities SET summary = NULL WHERE id = ?", (keep_id,))
+            conn.commit()
+
     def get(self, entity_id: int) -> Entity | None:
         with closing(self._connect()) as conn:
             conn.row_factory = sqlite3.Row

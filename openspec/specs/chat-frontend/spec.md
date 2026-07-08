@@ -74,3 +74,10 @@ Upload SHALL live on a separate admin page, not the main chat page. The admin pa
 #### Scenario: Uploading a document from the unlocked admin page
 - **WHEN** a user has unlocked the admin page and uploads a PDF
 - **THEN** the frontend shows the document's ingestion status until it becomes available for chat
+
+### Requirement: Independent Per-Session Conversation History
+Each browser session SHALL be assigned its own conversation identifier, independent of any other concurrent session, so conversation history is never shared between different users or browser tabs opened as separate sessions.
+
+#### Scenario: Two independent sessions get distinct conversation history
+- **WHEN** two separate browser sessions each open the chat frontend and send a message
+- **THEN** each session's message is recorded under a different conversation identifier, and neither session's conversation history includes the other's messages
