@@ -50,6 +50,38 @@ document.addEventListener('keydown', function (e) {
     }
 }, true);
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
+"""
+
+# "Classic" design: a refined take on the app's original gothic/serif
+# aesthetic - deep burgundy, warm parchment background, display serif
+# headings - matching the wiki's palette in src/wiki/templates/base.html.
+_CLASSIC_THEME = gr.themes.Base(
+    primary_hue=gr.themes.Color(
+        c50="#fdf2f3", c100="#fce4e6", c200="#f8c9cd", c300="#f0a0a8",
+        c400="#d96b78", c500="#a83d4a", c600="#8f2231", c700="#6b1420",
+        c800="#520f18", c900="#3d0b12", c950="#2a070c",
+    ),
+    secondary_hue="stone",
+    neutral_hue="stone",
+    font=gr.themes.GoogleFont("Source Serif 4"),
+    font_mono="ui-monospace",
+).set(
+    body_background_fill="#faf6ee",
+    body_background_fill_dark="#faf6ee",
+    background_fill_secondary="#f2ead9",
+    border_color_primary="#ddd0b8",
+    button_primary_background_fill="#6b1420",
+    button_primary_background_fill_hover="#8f2231",
+    button_primary_text_color="#fdf9ef",
+    block_title_text_color="#6b1420",
+    block_label_text_color="#6b1420",
+)
+
+_CLASSIC_CSS = """
+h1 { font-family: "Playfair Display", Georgia, serif !important; }
+.prose h1, .prose h2, .prose h3 { font-family: "Playfair Display", Georgia, serif !important; }
 """
 
 
@@ -187,7 +219,9 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
             return gr.update(visible=False), "Incorrect admin password.", None
         return gr.update(visible=True), "Unlocked.", password
 
-    with gr.Blocks(title="Buddharauer", head=_ENTER_TO_SEND_JS) as demo:
+    with gr.Blocks(
+        title="Buddharauer", head=_ENTER_TO_SEND_JS, theme=_CLASSIC_THEME, css=_CLASSIC_CSS
+    ) as demo:
         # A callable default is invoked fresh per browser session by Gradio -
         # a plain str(uuid.uuid4()) would be computed once at app-build time
         # and shared by every visitor.
