@@ -50,6 +50,37 @@ document.addEventListener('keydown', function (e) {
     }
 }, true);
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+"""
+
+# "Modern" design: a clean, contemporary light theme - sans-serif, blue
+# accent, card-based surfaces with soft shadows - matching the wiki's
+# palette in src/wiki/templates/base.html.
+_MODERN_THEME = gr.themes.Base(
+    primary_hue="blue",
+    secondary_hue="gray",
+    neutral_hue="gray",
+    radius_size="lg",
+    font=gr.themes.GoogleFont("Inter"),
+    font_mono="ui-monospace",
+).set(
+    body_background_fill="#f7f8fa",
+    body_background_fill_dark="#f7f8fa",
+    background_fill_secondary="#ffffff",
+    border_color_primary="#e5e7eb",
+    button_primary_background_fill="#2563eb",
+    button_primary_background_fill_hover="#1d4ed8",
+    button_primary_text_color="#ffffff",
+    block_title_text_color="#1a1d23",
+    block_label_text_color="#1a1d23",
+    block_background_fill="#ffffff",
+    block_border_color="#e5e7eb",
+    block_radius="12px",
+)
+
+_MODERN_CSS = """
+h1 { letter-spacing: -0.02em !important; }
 """
 
 
@@ -187,7 +218,9 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
             return gr.update(visible=False), "Incorrect admin password.", None
         return gr.update(visible=True), "Unlocked.", password
 
-    with gr.Blocks(title="Buddharauer", head=_ENTER_TO_SEND_JS) as demo:
+    with gr.Blocks(
+        title="Buddharauer", head=_ENTER_TO_SEND_JS, theme=_MODERN_THEME, css=_MODERN_CSS
+    ) as demo:
         # A callable default is invoked fresh per browser session by Gradio -
         # a plain str(uuid.uuid4()) would be computed once at app-build time
         # and shared by every visitor.

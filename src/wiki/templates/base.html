@@ -3,105 +3,148 @@
 <head>
     <meta charset="utf-8">
     <title>{% block title %}Buddharauer Wiki{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Georgia, serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-        .topnav { margin-bottom: 1.5rem; border-bottom: 2px solid #8b0000; padding-bottom: 0.5rem; }
-        .topnav a { margin-right: 1rem; text-decoration: none; color: #8b0000; font-weight: bold; }
-        h1 { border-bottom: 1px solid #ccc; padding-bottom: 0.3rem; }
-        .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.85rem; text-transform: capitalize; }
+        :root {
+            --ink: #1a1d23;
+            --muted: #6b7280;
+            --bg: #f7f8fa;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 0 1.5rem 3rem;
+            color: var(--ink);
+            background: var(--bg);
+            line-height: 1.6;
+        }
+        h1 { font-size: 1.9rem; font-weight: 700; border: none; margin-bottom: 0.3rem; letter-spacing: -0.02em; }
+        h2 { font-size: 1.2rem; font-weight: 600; margin-top: 1.8rem; }
+        .badge { display: inline-block; background: #eef2ff; color: var(--accent); border-radius: 999px; padding: 0.15rem 0.7rem; font-size: 0.78rem; font-weight: 600; text-transform: capitalize; }
         ul.entity-list { list-style: none; padding: 0; }
-        ul.entity-list li { padding: 0.3rem 0; }
-        ul.entity-grid { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        ul.entity-list li { padding: 0.4rem 0; }
+        ul.entity-grid { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.6rem; }
         ul.entity-grid li { padding: 0; }
         ul.citations { list-style: none; padding: 0; }
-        ul.citations li { padding: 0.2rem 0; }
-        a { color: #8b0000; }
+        ul.citations li { padding: 0.3rem 0; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); text-decoration: underline; }
+
         .wiki-btn {
             display: inline-block;
-            padding: 0.4rem 0.9rem;
-            background: #8b0000;
+            padding: 0.5rem 1.1rem;
+            background: var(--accent);
             color: #fff;
-            border-radius: 6px;
+            border-radius: 8px;
             text-decoration: none;
-            font-weight: bold;
-            transition: background 0.15s ease;
+            font-weight: 500;
+            font-size: 0.92rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            transition: background 0.15s ease, box-shadow 0.15s ease;
         }
-        .wiki-btn:hover { background: #b22222; color: #fff; }
+        .wiki-btn:hover { background: var(--accent-hover); color: #fff; text-decoration: none; box-shadow: 0 2px 6px rgba(37,99,235,0.25); }
 
-        /* Per-type entity colors, so different kinds of entities are
-           distinguishable at a glance instead of one bright red for
-           everything. real-person is deliberately muted - it's meta/credits
-           content, not story cast. */
-        .wiki-btn.type-character { background: #8b0000; }
-        .wiki-btn.type-character:hover { background: #b22222; }
-        .wiki-btn.type-creature { background: #5b3a7e; }
-        .wiki-btn.type-creature:hover { background: #7a55a3; }
-        .wiki-btn.type-faction { background: #4a4a4a; }
-        .wiki-btn.type-faction:hover { background: #6a6a6a; }
-        .wiki-btn.type-item { background: #96731a; }
-        .wiki-btn.type-item:hover { background: #b78d24; }
-        .wiki-btn.type-location { background: #1f6f78; }
-        .wiki-btn.type-location:hover { background: #2b909b; }
-        .wiki-btn.type-event { background: #a35a1f; }
-        .wiki-btn.type-event:hover { background: #c47029; }
-        .wiki-btn.type-real-person { background: #8a8577; }
-        .wiki-btn.type-real-person:hover { background: #a19c8c; }
+        /* Per-type entity colors - a clean, contemporary palette. */
+        .wiki-btn.type-character { background: #2563eb; }
+        .wiki-btn.type-character:hover { background: #1d4ed8; }
+        .wiki-btn.type-creature { background: #7c3aed; }
+        .wiki-btn.type-creature:hover { background: #6d28d9; }
+        .wiki-btn.type-faction { background: #475569; }
+        .wiki-btn.type-faction:hover { background: #334155; }
+        .wiki-btn.type-item { background: #d97706; }
+        .wiki-btn.type-item:hover { background: #b45309; }
+        .wiki-btn.type-location { background: #0d9488; }
+        .wiki-btn.type-location:hover { background: #0f766e; }
+        .wiki-btn.type-event { background: #dc2626; }
+        .wiki-btn.type-event:hover { background: #b91c1c; }
+        .wiki-btn.type-real-person { background: #9ca3af; }
+        .wiki-btn.type-real-person:hover { background: #6b7280; }
         .wiki-btn.type-other { background: #6b7280; }
-        .wiki-btn.type-other:hover { background: #868c96; }
+        .wiki-btn.type-other:hover { background: #4b5563; }
+
+        /* Top nav */
+        .topnav {
+            display: flex;
+            align-items: center;
+            padding: 1.1rem 0;
+            margin-bottom: 2rem;
+        }
+        .topnav a { text-decoration: none; color: var(--ink); font-weight: 600; margin-right: 1.8rem; font-size: 0.95rem; }
+        .topnav a:hover { color: var(--accent); text-decoration: none; }
 
         /* Sidebar + main content layout */
-        .wiki-layout { display: flex; gap: 2rem; align-items: flex-start; }
+        .wiki-layout { display: flex; gap: 2.5rem; align-items: flex-start; }
         .wiki-sidebar {
-            flex: 0 0 220px;
+            flex: 0 0 230px;
             position: sticky;
-            top: 1rem;
+            top: 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .wiki-sidebar h3 { margin-top: 1.2rem; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.03em; color: #666; border: none; }
-        .wiki-sidebar ul { list-style: none; padding: 0; margin: 0.4rem 0; }
-        .wiki-sidebar li { padding: 0.25rem 0; }
-        .wiki-sidebar .count { color: #888; font-size: 0.85rem; }
+        .wiki-sidebar h3 { margin-top: 1.2rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border: none; font-weight: 700; }
+        .wiki-sidebar ul { list-style: none; padding: 0; margin: 0.5rem 0; }
+        .wiki-sidebar li { padding: 0.35rem 0; }
+        .wiki-sidebar .count { color: var(--muted); font-size: 0.82rem; }
         #wiki-search {
             width: 100%;
             box-sizing: border-box;
-            padding: 0.5rem 0.6rem;
+            padding: 0.6rem 0.8rem;
             font-family: inherit;
-            border: 1px solid #ccc;
-            border-radius: 6px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
         }
+        #wiki-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
         .wiki-main { flex: 1; min-width: 0; }
 
         /* Breadcrumbs */
-        .breadcrumb { margin-bottom: 1rem; font-size: 0.9rem; color: #666; }
-        .breadcrumb a { color: #8b0000; text-decoration: none; }
-        .breadcrumb a:hover { text-decoration: underline; }
+        .breadcrumb { margin-bottom: 1.2rem; font-size: 0.85rem; color: var(--muted); }
+        .breadcrumb a { color: var(--muted); }
+        .breadcrumb a:hover { color: var(--accent); }
 
         /* Wiki landing page stats */
         .wiki-stats {
             display: flex;
             flex-wrap: wrap;
-            gap: 1.5rem;
-            margin: 1.5rem 0;
-            padding: 1rem 0;
-            border-top: 1px solid #eee;
-            border-bottom: 1px solid #eee;
+            gap: 0.75rem;
+            margin: 1.6rem 0;
         }
-        .wiki-stats .stat { text-align: center; min-width: 80px; }
-        .wiki-stats .stat strong { display: block; font-size: 1.6rem; color: #8b0000; }
-        .wiki-stats .stat span { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: #666; }
+        .wiki-stats .stat {
+            text-align: left;
+            min-width: 110px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.9rem 1.1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .wiki-stats .stat strong { display: block; font-size: 1.6rem; font-weight: 700; color: var(--ink); }
+        .wiki-stats .stat span { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 
         /* Entity page infobox */
-        .entity-page { display: flex; gap: 2rem; align-items: flex-start; }
+        .entity-page { display: flex; gap: 2.5rem; align-items: flex-start; }
         .entity-body { flex: 1; min-width: 0; }
         .infobox {
-            flex: 0 0 240px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            padding: 1rem;
-            background: #faf7f2;
+            flex: 0 0 250px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem;
+            background: var(--surface);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .infobox h3 { margin-top: 0; border: none; }
-        .infobox dt { font-weight: bold; font-size: 0.85rem; text-transform: uppercase; color: #666; margin-top: 0.7rem; }
-        .infobox dd { margin: 0.2rem 0 0 0; }
+        .infobox h3 { margin-top: 0; border: none; font-size: 1.1rem; }
+        .infobox dt { font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 0.8rem; }
+        .infobox dd { margin: 0.25rem 0 0 0; }
         .infobox ul { list-style: none; padding: 0; margin: 0; }
     </style>
 </head>
