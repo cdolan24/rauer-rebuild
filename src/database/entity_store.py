@@ -83,6 +83,11 @@ class EntityStore:
             conn.execute("UPDATE entities SET summary = ? WHERE id = ?", (summary, entity_id))
             conn.commit()
 
+    def set_type(self, entity_id: int, type_: str) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute("UPDATE entities SET type = ? WHERE id = ?", (type_, entity_id))
+            conn.commit()
+
     def get(self, entity_id: int) -> Entity | None:
         with closing(self._connect()) as conn:
             conn.row_factory = sqlite3.Row

@@ -63,6 +63,16 @@ def test_set_summary(tmp_path):
     assert entity.summary == "A generated wiki-style summary."
 
 
+def test_set_type(tmp_path):
+    store = EntityStore(str(tmp_path / "entities.db"))
+    entity_id = store.add_entity("doc1", "Nathan Caroland", "character", "Author of the M1E Core")
+
+    store.set_type(entity_id, "real-person")
+
+    entity = store.get(entity_id)
+    assert entity.type == "real-person"
+
+
 def test_list_all_orders_by_type_then_name(tmp_path):
     store = EntityStore(str(tmp_path / "entities.db"))
     store.add_entity("doc1", "Bree", "location", "desc")

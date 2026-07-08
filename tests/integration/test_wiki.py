@@ -12,7 +12,16 @@ def test_wiki_index_empty(api_client):
     assert "No entities extracted yet." in response.text
 
 
-def test_wiki_index_lists_entities_by_type(api_client):
+def test_wiki_chat_link_points_to_frontend_not_relative_root(api_client):
+    response = api_client.get("/wiki")
+
+    assert response.status_code == 200
+    # The wiki is served by the backend; chat lives on a different origin
+    # (the frontend). A relative href="/" would 404 against the backend.
+    assert 'href="http://localhost:7860">Chat</a>' in response.text
+
+
+def test_wiki_index_lists_categories_with_counts(api_client):
     store = api_client.app.state.entity_store
     store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
     store.add_entity("doc1", "Bree", "location", "A frontier town.")
@@ -20,10 +29,26 @@ def test_wiki_index_lists_entities_by_type(api_client):
     response = api_client.get("/wiki")
 
     assert response.status_code == 200
-    assert "Lady Justice" in response.text
-    assert "Bree" in response.text
+    # The landing page shows category tiles, not individual entity names -
+    # browsing entities happens on the category page.
+    assert "Lady Justice" not in response.text
     assert '/wiki/category/character' in response.text
     assert '/wiki/category/location' in response.text
+    assert "Characters (1)" in response.text
+    assert "Locations (1)" in response.text
+
+
+def test_wiki_index_shows_entity_and_document_stats(api_client):
+    store = api_client.app.state.entity_store
+    store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+    store.add_entity("doc1", "Bree", "location", "A frontier town.")
+    api_client.app.state.registry.mark_processed("doc1", "doc1", "doc1.pdf", 5, 1)
+
+    response = api_client.get("/wiki")
+
+    assert response.status_code == 200
+    assert '<strong>2</strong><span>Entities</span>' in response.text
+    assert '<strong>1</strong><span>Documents</span>' in response.text
 
 
 def test_wiki_category_lists_matching_entities(api_client):
@@ -36,6 +61,16 @@ def test_wiki_category_lists_matching_entities(api_client):
     assert response.status_code == 200
     assert "Lady Justice" in response.text
     assert "Bree" not in response.text
+
+
+def test_wiki_category_entities_colored_by_type(api_client):
+    store = api_client.app.state.entity_store
+    store.add_entity("doc1", "Nathan Caroland", "real-person", "Author of the M1E Core")
+
+    response = api_client.get("/wiki/category/real-person")
+
+    assert response.status_code == 200
+    assert 'class="wiki-btn type-real-person"' in response.text
 
 
 def test_wiki_category_empty(api_client):

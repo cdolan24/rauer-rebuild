@@ -47,6 +47,7 @@ class FrontendConfig:
     api_base_url: str
     port: int
     request_timeout: float
+    public_url: str
 
 
 @dataclass
@@ -127,6 +128,7 @@ def load_config(path: str | Path = "config.yaml") -> Config:
             api_base_url=frontend["api_base_url"],
             port=int(frontend["port"]),
             request_timeout=float(frontend.get("request_timeout", 180.0)),
+            public_url=frontend.get("public_url") or f"http://localhost:{frontend['port']}",
         ),
         log_level=raw.get("logging", {}).get("level", "INFO"),
         rag_min_score=float(raw.get("rag", {}).get("min_score", 0.55)),

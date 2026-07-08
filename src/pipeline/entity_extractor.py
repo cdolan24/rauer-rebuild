@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from src.database.entity_store import EntityMention, EntityStore
+from src.database.entity_store import Entity, EntityMention, EntityStore
 from src.pipeline.chunker import Chunk
 from src.utils.logging import get_logger
 from src.utils.ollama_client import OllamaClient, OllamaError
@@ -15,17 +15,61 @@ logger = get_logger(__name__)
 BATCH_SIZE = 45  # chunks per LLM call - mechanism proven on M1E, widening to cut call count further
 MAX_WORKERS = 8  # concurrent LLM calls - same pattern as pipeline/embeddings.py
 
-_ENTITY_TYPES = {"character", "location", "faction", "item"}
+# Single source of truth for the curated taxonomy - also imported by the
+# one-off reclassification script so both stay in sync.
+CURATED_ENTITY_TYPES = {
+    "character",
+    "location",
+    "faction",
+    "item",
+    "real-person",
+    "creature",
+    "event",
+}
 
 _SYSTEM_PROMPT = (
     "You identify named entities in Malifaux story text: characters, locations, "
-    "factions, and items. Respond ONLY with a JSON array of objects, each with "
-    '"name", "type" (one of character/location/faction/item), and "description" '
-    "(a one-sentence description). If there are no named entities, respond with []. "
-    "Do not include generic/unnamed references (e.g. \"the guard\", \"a soldier\")."
+    "factions, items, real people, creatures, and events. Respond ONLY with a JSON "
+    'array of objects, each with "name", "type" (one of character/location/faction/'
+    'item/real-person/creature/event), and "description" (a one-sentence description). '
+    "Use real-person for real-world people credited in the text (e.g. authors, artists, "
+    "producers), not fictional characters. Use creature for non-human cast (undead, "
+    "constructs, monsters) rather than character. Use event for significant in-world "
+    "occurrences referenced in the text, rather than describing them under another "
+    "entity. If there are no named entities, respond with []. Do not include "
+    'generic/unnamed references (e.g. "the guard", "a soldier").'
 )
 
 _JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+
+# A novel (non-curated) tag proposed during reclassification must cover at
+# least this many entities to survive as a real category - otherwise those
+# entities keep their prior type. Keeps the taxonomy from accumulating
+# one-off noise tags.
+DYNAMIC_TAG_MIN_COUNT = 3
+
+_RECLASSIFY_SYSTEM_PROMPT = (
+    "You categorize a named entity from a Malifaux story/game document, given its "
+    "current type, name, and description. Respond ONLY with a JSON object: "
+    '{"type": "<type>"}. Prefer one of these curated types: character, faction, '
+    "item, location, real-person, creature, event.\n\n"
+    "Use real-person ONLY when the description explicitly credits someone for "
+    "producing the book/document itself - e.g. \"Author of the M1E Core\", "
+    "\"Writer\", \"Producer\", \"Artist for the M1E Core\", \"graphic designer\", "
+    "someone named in a credits/staff list. A character who merely HAS an "
+    "in-story job (a shop owner, a union president, a boxer, a portrait painter "
+    "hired by another character) is NOT a real-person - they are a character "
+    "within the fiction, even though their description mentions an occupation.\n\n"
+    "Use creature for non-human cast: undead, constructs, monsters, spirits.\n"
+    "Use event for a significant in-world occurrence, not a person or place.\n\n"
+    "If the description is empty, vague, or you are not confident a change is "
+    "warranted, respond with the entity's CURRENT type unchanged rather than "
+    "guessing. Only propose a novel type beyond this curated list rarely, and "
+    "only when the entity clearly doesn't belong in any of them."
+)
+
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+_TAG_RE = re.compile(r"[a-z][a-z0-9-]*")
 
 
 @dataclass
@@ -66,7 +110,7 @@ def _parse_entities(response_text: str) -> list[ExtractedEntity]:
         if not name or not type_:
             continue
         type_ = str(type_).strip().lower()
-        if type_ not in _ENTITY_TYPES:
+        if type_ not in CURATED_ENTITY_TYPES:
             continue
         entities.append(
             ExtractedEntity(
@@ -151,3 +195,92 @@ def extract_entities_for_document(
 
     logger.info("Extracted %d entities for %s", len(seen_names), document_id)
     return len(seen_names)
+
+
+def _build_reclassify_messages(entity: Entity) -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": _RECLASSIFY_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                f"Name: {entity.name}\nCurrent type: {entity.type}\n"
+                f"Description: {entity.description}\n\nJSON:"
+            ),
+        },
+    ]
+
+
+def _parse_reclassification(response_text: str) -> str | None:
+    """Parse the model's `{"type": "..."}` response into a normalized tag,
+    tolerating extra prose. Returns None if nothing usable was found."""
+    match = _JSON_OBJECT_RE.search(response_text)
+    if not match:
+        return None
+    try:
+        obj = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+    type_ = obj.get("type")
+    if not type_ or not isinstance(type_, str):
+        return None
+    type_ = type_.strip().lower()
+    return type_ if _TAG_RE.fullmatch(type_) else None
+
+
+def reclassify_entities(
+    entities: list[Entity],
+    ollama_client: OllamaClient,
+    chat_model: str,
+    max_workers: int = MAX_WORKERS,
+) -> dict[int, str]:
+    """Re-type existing entities against the current taxonomy from their
+    stored name/description, without re-reading source documents.
+
+    The model may propose a novel tag beyond the curated set, but a novel
+    tag only survives if at least DYNAMIC_TAG_MIN_COUNT entities land in it;
+    otherwise those entities keep their original type.
+
+    Returns a mapping of entity_id -> new type, only for entities whose type
+    actually changed. Callers persist this via EntityStore.set_type.
+    """
+    if not entities:
+        return {}
+
+    def _classify(entity: Entity) -> tuple[int, str, str]:
+        if not entity.description.strip():
+            # With no description, there's no real signal to classify from -
+            # empirically, the model defaults to "sounds like a real name"
+            # and mistypes every blank-description entity as real-person.
+            # Cheaper and more accurate to just leave these alone.
+            return entity.id, entity.type, entity.type
+        messages = _build_reclassify_messages(entity)
+        try:
+            response = ollama_client.chat(chat_model, messages, temperature=0.0)
+        except OllamaError as e:
+            logger.warning(
+                "Reclassification failed for entity %d (%s), keeping type '%s': %s",
+                entity.id, entity.name, entity.type, e,
+            )
+            return entity.id, entity.type, entity.type
+        parsed = _parse_reclassification(response)
+        new_type = parsed if parsed else entity.type
+        return entity.id, entity.type, new_type
+
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(entities))) as executor:
+        results = list(executor.map(_classify, entities))
+
+    novel_tag_counts: dict[str, int] = {}
+    for _, _, new_type in results:
+        if new_type not in CURATED_ENTITY_TYPES:
+            novel_tag_counts[new_type] = novel_tag_counts.get(new_type, 0) + 1
+
+    updates: dict[int, str] = {}
+    for entity_id, original_type, new_type in results:
+        if new_type not in CURATED_ENTITY_TYPES and novel_tag_counts[new_type] < DYNAMIC_TAG_MIN_COUNT:
+            final_type = original_type
+        else:
+            final_type = new_type
+        if final_type != original_type:
+            updates[entity_id] = final_type
+
+    return updates

@@ -44,6 +44,10 @@ frontend:
   # give the frontend's HTTP client enough headroom that it doesn't
   # time out while the backend is still legitimately working.
   request_timeout: 180
+  # How a browser reaches the frontend - the backend (which serves the wiki,
+  # a different origin) needs this to build a working link back to chat.
+  # Defaults to http://localhost:{port} if unset.
+  public_url: "http://localhost:7860"
 
 logging:
   level: "INFO"

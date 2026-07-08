@@ -114,3 +114,23 @@ def test_ollama_request_timeout_can_be_overridden(tmp_path):
     config = load_config(config_path)
 
     assert config.ollama.request_timeout == 30.0
+
+
+def test_frontend_public_url_defaults_from_port_when_absent(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG, encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.frontend.public_url == "http://localhost:7860"
+
+
+def test_frontend_public_url_can_be_overridden(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        _BASE_CONFIG + '\n  public_url: "http://example.com:7860"\n', encoding="utf-8"
+    )
+
+    config = load_config(config_path)
+
+    assert config.frontend.public_url == "http://example.com:7860"

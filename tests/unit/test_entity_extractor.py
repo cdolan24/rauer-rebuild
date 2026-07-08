@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.pipeline.entity_extractor import _batch_chunks, _parse_entities
+from src.pipeline.entity_extractor import CURATED_ENTITY_TYPES, _batch_chunks, _parse_entities
 
 
 def _fake_chunks(n):
@@ -70,3 +70,14 @@ def test_parse_entities_filters_unknown_type():
     entities = _parse_entities(response)
 
     assert entities == []
+
+
+def test_parse_entities_accepts_all_curated_types():
+    response_items = [
+        {"name": f"Entity-{t}", "type": t, "description": "d"} for t in CURATED_ENTITY_TYPES
+    ]
+    import json
+
+    entities = _parse_entities(json.dumps(response_items))
+
+    assert {e.type for e in entities} == CURATED_ENTITY_TYPES

@@ -1,9 +1,4 @@
-# entity-extraction Specification
-
-## Purpose
-TBD - created by syncing change entity-wiki-and-citations. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Named Entity Extraction Per Document
 The system SHALL identify named entities mentioned in an ingested document using the local LLM, processing chunks in batches rather than individually. Each entity SHALL be typed as one of: character, faction, item, location, real-person, creature, or event.
@@ -15,6 +10,8 @@ The system SHALL identify named entities mentioned in an ingested document using
 #### Scenario: Distinguishing real people from fictional characters
 - **WHEN** the source text credits a real person (e.g. an author, artist, or producer) rather than describing a fictional character
 - **THEN** the entity is typed as `real-person`, not `character`
+
+## ADDED Requirements
 
 ### Requirement: Threshold-Gated Dynamic Tagging
 During a reclassification pass, the system SHALL allow the model to propose a novel entity type beyond the curated set, but a novel type SHALL only be retained as a real category if at least 3 entities are assigned to it; otherwise those entities revert to their prior type.
@@ -33,17 +30,3 @@ The system SHALL support reclassifying existing entities into an updated taxonom
 #### Scenario: Reclassifying existing entities
 - **WHEN** a reclassification pass is run against already-extracted entities
 - **THEN** each entity's type is re-evaluated against the current taxonomy and updated in place, without any new LLM calls against the source documents
-
-### Requirement: Entity Mention Indexing
-The system SHALL index which chunks and pages mention each identified entity, using case-insensitive name matching against existing chunk text.
-
-#### Scenario: Indexing mentions of an entity
-- **WHEN** an entity has been identified for a document
-- **THEN** the system records every chunk in that document whose text contains the entity's name, along with the page(s) that chunk spans
-
-### Requirement: Entity Storage
-The system SHALL persist identified entities and their mentions so they can be queried without re-running extraction.
-
-#### Scenario: Querying an entity's mentions after extraction
-- **WHEN** entity extraction has completed for a document
-- **THEN** the entity and all of its indexed mentions are retrievable from storage without invoking the LLM again

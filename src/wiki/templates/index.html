@@ -2,15 +2,22 @@
 {% block title %}Wiki - Buddharauer{% endblock %}
 {% block content %}
 <h1>Malifaux Wiki</h1>
-<p>Browse entities extracted from the ingested story documents.</p>
-{% for type, entities in by_type.items() %}
-<h2><a class="wiki-btn category-btn" href="/wiki/category/{{ type }}">{{ type|capitalize }}s</a> ({{ entities|length }})</h2>
+<p>A wiki of entities extracted from the ingested Malifaux story documents.</p>
+
+<div class="wiki-stats">
+    <div class="stat"><strong>{{ total_entities }}</strong><span>Entities</span></div>
+    <div class="stat"><strong>{{ total_documents }}</strong><span>Documents</span></div>
+    {% for type, count in category_counts.items() %}
+    <div class="stat"><strong>{{ count }}</strong><span>{{ type|capitalize }}s</span></div>
+    {% endfor %}
+</div>
+
+<h2>Browse by Category</h2>
 <ul class="entity-grid">
-    {% for entity in entities[:5] %}
-    <li><a class="wiki-btn" href="/wiki/entity/{{ entity.id }}">{{ entity.name }}</a></li>
+    {% for type, entities in by_type.items() %}
+    <li><a class="wiki-btn {{ type|entity_color_class }}" href="/wiki/category/{{ type }}">{{ type|capitalize }}s ({{ entities|length }})</a></li>
+    {% else %}
+    <li>No entities extracted yet.</li>
     {% endfor %}
 </ul>
-{% else %}
-<p>No entities extracted yet.</p>
-{% endfor %}
 {% endblock %}

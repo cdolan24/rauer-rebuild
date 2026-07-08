@@ -27,8 +27,27 @@
             transition: background 0.15s ease;
         }
         .wiki-btn:hover { background: #b22222; color: #fff; }
-        .wiki-btn.category-btn { background: #4a4a4a; }
-        .wiki-btn.category-btn:hover { background: #6a6a6a; }
+
+        /* Per-type entity colors, so different kinds of entities are
+           distinguishable at a glance instead of one bright red for
+           everything. real-person is deliberately muted - it's meta/credits
+           content, not story cast. */
+        .wiki-btn.type-character { background: #8b0000; }
+        .wiki-btn.type-character:hover { background: #b22222; }
+        .wiki-btn.type-creature { background: #5b3a7e; }
+        .wiki-btn.type-creature:hover { background: #7a55a3; }
+        .wiki-btn.type-faction { background: #4a4a4a; }
+        .wiki-btn.type-faction:hover { background: #6a6a6a; }
+        .wiki-btn.type-item { background: #96731a; }
+        .wiki-btn.type-item:hover { background: #b78d24; }
+        .wiki-btn.type-location { background: #1f6f78; }
+        .wiki-btn.type-location:hover { background: #2b909b; }
+        .wiki-btn.type-event { background: #a35a1f; }
+        .wiki-btn.type-event:hover { background: #c47029; }
+        .wiki-btn.type-real-person { background: #8a8577; }
+        .wiki-btn.type-real-person:hover { background: #a19c8c; }
+        .wiki-btn.type-other { background: #6b7280; }
+        .wiki-btn.type-other:hover { background: #868c96; }
 
         /* Sidebar + main content layout */
         .wiki-layout { display: flex; gap: 2rem; align-items: flex-start; }
@@ -56,6 +75,20 @@
         .breadcrumb a { color: #8b0000; text-decoration: none; }
         .breadcrumb a:hover { text-decoration: underline; }
 
+        /* Wiki landing page stats */
+        .wiki-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+            padding: 1rem 0;
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+        }
+        .wiki-stats .stat { text-align: center; min-width: 80px; }
+        .wiki-stats .stat strong { display: block; font-size: 1.6rem; color: #8b0000; }
+        .wiki-stats .stat span { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: #666; }
+
         /* Entity page infobox */
         .entity-page { display: flex; gap: 2rem; align-items: flex-start; }
         .entity-body { flex: 1; min-width: 0; }
@@ -75,7 +108,7 @@
 <body>
     <nav class="topnav">
         <a href="/wiki">Wiki Home</a>
-        <a href="/">Chat</a>
+        <a href="{{ frontend_url }}">Chat</a>
     </nav>
     <div class="wiki-layout">
         <aside class="wiki-sidebar">
