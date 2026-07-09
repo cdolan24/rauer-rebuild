@@ -50,6 +50,60 @@ document.addEventListener('keydown', function (e) {
     }
 }, true);
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+"""
+
+# "Dark" design: an immersive, moody dark mode leaning into Malifaux's
+# gothic-horror atmosphere - near-black background, crimson/gold accents,
+# an engraved-title display font - matching the wiki's palette in
+# src/wiki/templates/base.html. Both the light and dark theme variants are
+# set to the same dark values so it stays dark regardless of the browser's
+# color-scheme preference.
+_DARK_THEME = gr.themes.Base(
+    primary_hue="red",
+    secondary_hue="gray",
+    neutral_hue="gray",
+    font=gr.themes.GoogleFont("EB Garamond"),
+    font_mono="ui-monospace",
+).set(
+    body_background_fill="#100d0f",
+    body_background_fill_dark="#100d0f",
+    body_text_color="#e8e0d5",
+    body_text_color_dark="#e8e0d5",
+    background_fill_secondary="#1c1719",
+    background_fill_secondary_dark="#1c1719",
+    border_color_primary="#2f2529",
+    border_color_primary_dark="#2f2529",
+    button_primary_background_fill="#b8283f",
+    button_primary_background_fill_dark="#b8283f",
+    button_primary_background_fill_hover="#d63a54",
+    button_primary_background_fill_hover_dark="#d63a54",
+    button_primary_text_color="#100d0f",
+    button_primary_text_color_dark="#100d0f",
+    block_title_text_color="#c9a227",
+    block_title_text_color_dark="#c9a227",
+    block_label_text_color="#c9a227",
+    block_label_text_color_dark="#c9a227",
+    block_background_fill="#1c1719",
+    block_background_fill_dark="#1c1719",
+    block_border_color="#2f2529",
+    block_border_color_dark="#2f2529",
+    input_background_fill="#1c1719",
+    input_background_fill_dark="#1c1719",
+    button_secondary_background_fill="#241c1f",
+    button_secondary_background_fill_dark="#241c1f",
+    button_secondary_background_fill_hover="#332830",
+    button_secondary_background_fill_hover_dark="#332830",
+    button_secondary_text_color="#e8e0d5",
+    button_secondary_text_color_dark="#e8e0d5",
+    button_secondary_border_color="#2f2529",
+    button_secondary_border_color_dark="#2f2529",
+)
+
+_DARK_CSS = """
+h1, .prose h1, .prose h2, .prose h3 { font-family: "Cinzel", Georgia, serif !important; color: #c9a227 !important; letter-spacing: 0.02em; }
+.prose, .prose p, .prose li { color: #e8e0d5 !important; }
 """
 
 
@@ -226,7 +280,9 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                 statuses.append(f"**{service}**: unreachable ({e})")
         return " &nbsp;|&nbsp; ".join(statuses)
 
-    with gr.Blocks(title="Buddharauer", head=_ENTER_TO_SEND_JS) as demo:
+    with gr.Blocks(
+        title="Buddharauer", head=_ENTER_TO_SEND_JS, theme=_DARK_THEME, css=_DARK_CSS
+    ) as demo:
         # A callable default is invoked fresh per browser session by Gradio -
         # a plain str(uuid.uuid4()) would be computed once at app-build time
         # and shared by every visitor.
