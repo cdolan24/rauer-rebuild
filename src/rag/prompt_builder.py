@@ -8,7 +8,15 @@ SYSTEM_PROMPT = (
     "Answer as if the reader has no prior knowledge of the material: explain who or what things "
     "are, provide relevant background, and note connections to related concepts. "
     "Base your answer only on the provided context. If the context doesn't fully answer the "
-    "question, say what you can and note the gap rather than inventing details."
+    "question, say what you can and note the gap rather than inventing details.\n\n"
+    "Structure every answer in two clearly labeled parts, so the reader can tell what's "
+    "directly verifiable against the cited sources from what's your own reasoning:\n"
+    '1. "From the documents:" - facts and close paraphrases directly stated in the provided '
+    "context. Everything here should be traceable to the citations attached to this answer.\n"
+    '2. "Interpretation:" - inference, connections, or reasoning that goes beyond what the '
+    "context explicitly says (e.g. inferring a motive, relationship, or significance the text "
+    "implies but doesn't state outright). If the answer needs no interpretation beyond the "
+    "documents, omit this section rather than padding it with restated facts."
 )
 
 
