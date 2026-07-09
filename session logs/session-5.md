@@ -1,7 +1,7 @@
 # Session 5
 
-**Branch:** `session-5` (off `main`, which now includes all of session 4's merged work)
-**OpenSpec changes:** `finalize-and-ship` (archived `2026-07-08-finalize-and-ship`)
+**Branch:** `session-5` (merged into `main` at the end of this session)
+**OpenSpec changes:** `finalize-and-ship` (archived `2026-07-08-finalize-and-ship`), `wiki-legibility-and-deploy-fixes` (archived `2026-07-09-wiki-legibility-and-deploy-fixes`)
 
 ## What shipped
 
@@ -123,14 +123,13 @@ Neither could be verified by actually running `nginx -t` or `setup_ec2.sh` again
 
 ## State at end of session
 
-- `session-5` branch off `main`, holding all four rounds of this session's work; not yet merged to `main`.
+- `session-5` merged into `main` (fast-forward, no divergence) at the end of this session.
 - 9 capability specs (all synced), no active OpenSpec changes.
 - `design-dark` confirmed as the final frontend direction; `design-classic`/`design-modern` intentionally kept as reference.
 - Backend and frontend both restarted and smoke-tested on the final code.
 
 ## Open items carried forward
 
-- Merge `session-5` into `main` when the user is ready.
 - Decide whether to re-ingest the live M1E/M2E data to benefit from the chunking-boundary fix from round 3 (changes chunk IDs; orphans existing entity_mentions unless entities are also re-extracted) - re-ingesting now would also pick up the new automatic dedup/summary step.
 - Optionally hand-merge the one real, currently-unmerged duplicate found in round 3: "Governor-General's mansion" / "The Governor's Mansion" (both M1E, same place, automated dedup declined due to one having an empty description).
 - Image-processing/vision-model support remains unbuilt - see the round-1 research summary above if greenlit.
