@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,10 +12,40 @@ class PDFExtractionError(Exception):
     """Raised when a PDF cannot be opened or parsed."""
 
 
+# Matches a running page header of the form "<Edition> Core <sep> <Title>"
+# (e.g. "M1E Core • Snow on a Tombstone") - the pattern Wyrd's Malifaux
+# sourcebooks repeat on every page of a given story/chapter. Not tied to a
+# specific edition name, so it applies to any similarly-formatted sourcebook,
+# not just the two documents this project ships with. The separator is
+# restricted to non-word, non-newline, non-period characters (real headers
+# use a bullet like "•"): this deliberately does NOT match a table-of-contents
+# line like "M1E Core..........................", where the trailing dots are
+# just a leader and there's no real title on that line - without this
+# restriction, \W+ (which includes \n) would happily consume the leader dots
+# and the line break and capture the *next* TOC entry as a bogus "title".
+_RUNNING_HEADER_RE = re.compile(r"^\s*\S+\s+Core[^\w\n.]+(.+?)\s*$", re.MULTILINE)
+
+# A genuine running header repeats across every page of a story; a one-off
+# coincidental match (e.g. a cover page's "<Edition> Core • <book subtitle>"
+# line, which is syntactically identical but never repeats) shouldn't be
+# treated as a section - require it to appear on at least this many pages.
+_MIN_SECTION_PAGE_COUNT = 2
+
+
+def _detect_section(text: str) -> str | None:
+    """Best-effort detection of which story/chapter a page belongs to, from
+    its running header. Returns None if no such header is found (most pages
+    of a rules-heavy sourcebook won't have one - that's fine, it just means
+    chunking can't use this signal for that page)."""
+    match = _RUNNING_HEADER_RE.search(text)
+    return match.group(1).strip() if match else None
+
+
 @dataclass
 class ExtractedPage:
     page_number: int  # 1-indexed
     text: str
+    section: str | None = None  # best-effort story/chapter title, if detected
 
 
 @dataclass
@@ -58,9 +90,14 @@ def extract_pdf(path: str | Path) -> ExtractedDocument:
                 raise PDFExtractionError(
                     f"Failed to extract text from page {i} of '{pdf_path}': {e}"
                 ) from e
-            pages.append(ExtractedPage(page_number=i, text=text))
+            pages.append(ExtractedPage(page_number=i, text=text, section=_detect_section(text)))
     finally:
         doc.close()
+
+    section_counts = Counter(p.section for p in pages if p.section is not None)
+    for page in pages:
+        if page.section is not None and section_counts[page.section] < _MIN_SECTION_PAGE_COUNT:
+            page.section = None
 
     return ExtractedDocument(
         document_id=pdf_path.stem,

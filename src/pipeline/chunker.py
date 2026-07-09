@@ -22,9 +22,12 @@ class Chunk:
 class _Unit:
     page_number: int
     text: str
+    section: str | None = None
 
 
-def _split_page_into_units(page_number: int, text: str, max_unit_size: int) -> list[_Unit]:
+def _split_page_into_units(
+    page_number: int, text: str, max_unit_size: int, section: str | None = None
+) -> list[_Unit]:
     """Split a page's text into paragraph- or sentence-level units."""
     units: list[_Unit] = []
     for para in _PARAGRAPH_RE.split(text):
@@ -32,12 +35,12 @@ def _split_page_into_units(page_number: int, text: str, max_unit_size: int) -> l
         if not para:
             continue
         if len(para) <= max_unit_size:
-            units.append(_Unit(page_number, para))
+            units.append(_Unit(page_number, para, section))
             continue
         for sentence in _SENTENCE_RE.split(para):
             sentence = sentence.strip()
             if sentence:
-                units.append(_Unit(page_number, sentence))
+                units.append(_Unit(page_number, sentence, section))
     return units
 
 
@@ -53,10 +56,20 @@ def chunk_document(
     trailing ``chunk_overlap`` characters of units forward into the next
     chunk so context isn't lost at chunk boundaries. Each chunk's
     ``page_start``/``page_end`` span the pages its constituent units came from.
+
+    When a page's detected ``section`` (e.g. a story/chapter title, from a
+    running page header - see pdf_extractor.py) differs from the previous
+    page's, that's treated as a hard break: the in-progress chunk is flushed
+    without carrying overlap forward, so a chunk never blends the tail of one
+    story with the start of the next. Pages with no detected section (most of
+    a rules-heavy sourcebook) don't trigger this - chunking falls back to
+    size-based splitting exactly as before for that content.
     """
     all_units: list[_Unit] = []
     for page in document.pages:
-        all_units.extend(_split_page_into_units(page.page_number, page.text, chunk_size))
+        all_units.extend(
+            _split_page_into_units(page.page_number, page.text, chunk_size, page.section)
+        )
 
     if not all_units:
         return []
@@ -83,9 +96,24 @@ def chunk_document(
             )
         )
 
+    current_section: str | None = None
+
     for unit in all_units:
         unit_len = len(unit.text) + 1
-        if current and current_len + unit_len > chunk_size:
+        crosses_section = (
+            current
+            and current_section is not None
+            and unit.section is not None
+            and unit.section != current_section
+        )
+        if crosses_section:
+            # A detected story/chapter boundary - flush without carrying
+            # overlap forward, so the new chunk doesn't open with trailing
+            # text from the story that just ended.
+            flush()
+            current = []
+            current_len = 0
+        elif current and current_len + unit_len > chunk_size:
             flush()
             # Carry trailing units forward as overlap context.
             overlap_units: list[_Unit] = []
@@ -101,6 +129,8 @@ def chunk_document(
 
         current.append(unit)
         current_len += unit_len
+        if unit.section is not None:
+            current_section = unit.section
 
     flush()
     return chunks

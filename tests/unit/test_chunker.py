@@ -13,6 +13,18 @@ def _doc(pages: list[str]) -> ExtractedDocument:
     )
 
 
+def _doc_with_sections(pages: list[tuple[str, str | None]]) -> ExtractedDocument:
+    return ExtractedDocument(
+        document_id="doc1",
+        title="doc1",
+        source_path="doc1.pdf",
+        pages=[
+            ExtractedPage(page_number=i + 1, text=text, section=section)
+            for i, (text, section) in enumerate(pages)
+        ],
+    )
+
+
 def test_chunk_metadata_complete():
     document = _doc(["Aragorn walked into Bree.\n\nHe met Gandalf there."])
 
@@ -66,3 +78,53 @@ def test_empty_document_returns_no_chunks():
     chunks = chunk_document(document)
 
     assert chunks == []
+
+
+def test_section_change_forces_a_hard_break():
+    # Small enough to combine into one chunk by size alone, but they belong
+    # to two different detected stories - should NOT be merged.
+    document = _doc_with_sections(
+        [
+            ("The end of the first story.", "Snow on a Tombstone"),
+            ("The start of the second story.", "Into the Breach"),
+        ]
+    )
+
+    chunks = chunk_document(document, chunk_size=800, chunk_overlap=150)
+
+    assert len(chunks) == 2
+    assert "first story" in chunks[0].text
+    assert "second story" in chunks[1].text
+    assert "second story" not in chunks[0].text
+    assert "first story" not in chunks[1].text
+
+
+def test_pages_without_detected_section_still_merge_by_size():
+    # None sections (typical for rules-heavy content) shouldn't force a
+    # break - regular size-based merging still applies.
+    document = _doc_with_sections(
+        [("Short page one text.", None), ("Short page two text.", None)]
+    )
+
+    chunks = chunk_document(document, chunk_size=800, chunk_overlap=150)
+
+    assert any(c.page_start == 1 and c.page_end == 2 for c in chunks)
+
+
+def test_section_boundary_does_not_carry_overlap_across_it():
+    long_paragraph = " ".join(f"Sentence number {i} about the first story." for i in range(60))
+    document = _doc_with_sections(
+        [
+            (long_paragraph, "Snow on a Tombstone"),
+            ("The second story begins here.", "Into the Breach"),
+        ]
+    )
+
+    chunks = chunk_document(document, chunk_size=200, chunk_overlap=50)
+
+    assert len(chunks) >= 2
+    last_of_first_story = chunks[-2]
+    first_of_second_story = chunks[-1]
+    assert "second story begins" in first_of_second_story.text
+    assert "first story" not in first_of_second_story.text
+    assert last_of_first_story.text != first_of_second_story.text
