@@ -62,19 +62,52 @@ All 9 capability specs (`admin-controls`, `chat-api`, `chat-frontend`, `deployme
 
 162/162 tests passing (up from 157 earlier this session - added a wiki-summary-fallback regression test and 4 new `api_client` tests). Restarted both the backend and frontend on the fixed code and smoke-tested both (`/`, `/admin` both return 200); live-verified the lockout-message fix against the real backend with an unmocked `ApiClient`.
 
+## Round 3: the deferred, lower-priority items - and one real deployment gap
+
+The user confirmed `design-dark` as the final frontend direction (the other two branches stay purely as reference, no action needed) and asked to spend the rest of the session on the three lowest-priority carried-forward items, plus asked a direct question: if AWS infra were already in place, what's actually still risky?
+
+### Answered: real risk even with infra ready
+
+Checked one concrete claim rather than speaking in generalities: `deploy/backup.sh` calls the `sqlite3` CLI directly, but `setup_ec2.sh`'s `apt-get install` line never installed it - a fresh Ubuntu 22.04 instance isn't guaranteed to have it, so the daily backup timer would have silently failed from day one. Fixed immediately (`apt-get install ... sqlite3`). Also flagged, without code changes needed: zero live executions of any deploy script, Certbot/DNS ordering, ongoing GPU-instance cost from the moment it launches, no monitoring/alerting, and no real backup/restore drill ever run end-to-end.
+
+### Chunking across story boundaries - fixed, not just deferred again
+
+Investigated the actual M1E/M2E text before assuming this needed the "re-extraction with font/heading metadata" the design.md originally called for. Found something simpler and just as reliable: Wyrd's sourcebooks repeat a running page header per story ("M1E Core • Snow on a Tombstone") on every page of that story - no font metadata needed, just a text pattern. Implemented: `pdf_extractor.py` detects this per page (`ExtractedPage.section`), `chunker.py` treats a section change as a hard break (flushed without carrying overlap forward, so a chunk never opens with the previous story's trailing sentences).
+
+Two false-positive sources had to be filtered out before this was trustworthy, both found by testing against the real PDFs rather than trusting the regex on paper:
+- The naive separator (`\W+`) matches newlines, so a table-of-contents dot-leader line ("M1E Core...........................") would consume the leader dots *and* the line break, capturing the next unrelated TOC entry as a bogus title. Fixed by excluding newlines and periods from the separator class.
+- A cover page's "`<Edition> Core • <book subtitle>`" line is syntactically identical to a real running header but never repeats. Added a document-wide filter: a detected title only counts as a real section if it appears on 2+ pages.
+
+Verified on the real M1E/M2E PDFs (not just synthetic unit tests): after both fixes, 0 chunks straddle a detected section, real transitions are still caught (e.g. pages 13→15 in M1E, "The Breach, A History of Malifaux" → "Snow on a Tombstone"), and both false-positive sources are gone from the per-page section list. Confirmed the fix isn't a no-op by reverting `chunker.py` alone and re-running the new tests - both failed with the exact "story A's tail merged into story B's first chunk" pattern the fix targets, then passed once restored.
+
+**This only affects newly-ingested documents.** The already-ingested M1E/M2E data in `vector_db/` was chunked before this change. Applying it retroactively means re-ingestion - which changes chunk IDs and would orphan the existing `entity_mentions` rows unless entities are also re-extracted, and takes real time (the session-4 benchmark put full-document ingestion in the multi-minute range per document). Not done automatically - this is a real, semi-irreversible operation on the current dataset and is a decision for the user, not an implementation detail.
+
+### Wiki search scaling - investigated, genuinely not an issue yet
+
+Checked the actual implementation (`base.html`'s inline script) rather than assuming the old concern still applied: it's a per-page DOM filter, not a sitewide search - it filters category tiles on the index page and filters entities-within-one-category on a category page, which is a coherent, correctly-scoped design, not a bug. Checked real numbers against the live database: 122 entities total, 86 in the largest category (character). A `querySelectorAll` + text-scan over 86 elements per keystroke is trivially fast; even an order-of-magnitude increase (860) wouldn't produce noticeable lag. No code change made - this would be over-engineering for a scale problem that doesn't exist yet, consistent with not building for hypothetical future requirements. Worth revisiting only if a category realistically approaches the thousands.
+
+### Threshold tuning - real evidence gathered, no blind changes made
+
+**Dedup similarity threshold (0.7):** ranked every same-type entity-name pair in the live 122-entity database by similarity ratio to see what the threshold actually admits or excludes. Found it's well-calibrated: the one plausible near-duplicate above the threshold ("Governor-General's mansion" vs. "The Governor's Mansion," 0.756) is a real candidate worth asking about, while everything below 0.7 (Niccolò/Niño, Mara/Margaret, Gideon/Simeon, etc.) is obviously unrelated - lowering the threshold would only flood the LLM confirmation step with noise for zero recall gain. Ran `scripts/dedupe_entities.py --dry-run` against the live data to confirm the full pipeline still behaves correctly: it found "no duplicate groups" this time, including declining to merge the Governor's mansion pair - because "The Governor's Mansion" has an empty stored description, giving the LLM confirmation step insufficient evidence to confidently confirm a merge. That's the conservative, intentional behavior the design was built around (documented in session 4), not a bug - but it does mean this specific pair is a real, currently-unmerged duplicate that a human reviewer (with more context than the model had) could confirm and merge by hand if desired. Flagged for the user rather than auto-merged unilaterally.
+
+**Dynamic-tag threshold (3 entities):** no novel tag has ever been proposed in an actual reclassification run - every entity in the real data landed in the 7 curated types. There's no real precision/recall evidence to tune this against yet; left as-is, honestly documented as untested rather than pretending a data-backed adjustment was made.
+
+## Verification
+
+170/170 tests passing (up from 162 earlier this session - added 3 chunker tests and 5 pdf_extractor tests covering the section-detection heuristic and both false-positive fixes). All new tests confirmed to actually catch their target bug: reverted the relevant source file, watched them fail with the real bug's exact symptom, restored the fix, watched them pass.
+
 ## State at end of session
 
-- `session-5` branch off `main`, holding the rate-limiting/backup work, the bug fixes, the bloat cleanup, and the spec documentation pass; not yet merged to `main`.
-- 9 capability specs (all synced, all with real Purpose statements now), no active OpenSpec changes.
-- Backend and frontend both restarted on this session's final code and smoke-tested.
-- `../rauer-rebuild-session2-demo` worktree removed; the four other session-4-era worktrees (`chat-frontend-dark`, `design-dark`, `design-classic`, `design-modern`) remain, all clean.
+- `session-5` branch off `main`, holding the rate-limiting/backup work, the bug fixes, the bloat cleanup, the spec documentation pass, the sqlite3 install fix, and the chunking-boundary fix; not yet merged to `main`.
+- 9 capability specs (all synced, all with real Purpose statements), no active OpenSpec changes.
+- `design-dark` confirmed as the final frontend direction; `design-classic`/`design-modern` intentionally kept as reference, no longer an open decision.
+- Backend and frontend both restarted and smoke-tested earlier in the session; the chunking-boundary fix was verified directly against the real PDFs/text rather than through the running services.
 
 ## Open items carried forward
 
-- Merge `session-5` into `main` when the user is ready (not done automatically this session, unlike session 4's explicit merge instruction).
+- Merge `session-5` into `main` when the user is ready.
+- Decide whether to re-ingest the live M1E/M2E data to actually benefit from the chunking-boundary fix (changes chunk IDs; orphans existing entity_mentions unless entities are also re-extracted).
+- Optionally hand-merge the one real, currently-unmerged duplicate found this session: "Governor-General's mansion" / "The Governor's Mansion" (both M1E, same place, automated dedup declined due to one having an empty description).
 - Image-processing/vision-model support remains unbuilt - see the research summary above if greenlit.
-- `design-classic` and `design-modern` remain unmerged, undecided alternatives to the adopted dark theme.
 - Off-host (S3) backup replication - deferred until a real AWS account exists to configure it against.
-- Chunking can straddle story boundaries in the M1E/M2E anthologies - still deferred (unchanged from session 4).
-- Client-side wiki search doesn't scale indefinitely - revisit if entity count grows an order of magnitude (unchanged from session 4).
-- The dynamic-tag threshold (3 entities) and dedup similarity threshold (0.7) remain untuned judgment calls (unchanged from session 4).
+- None of the `deploy/` artifacts have been run against a real AWS account - review before applying to a live server; the sqlite3-install gap found this session is exactly the kind of issue that only surfaces on a first real deploy.
