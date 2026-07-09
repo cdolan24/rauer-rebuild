@@ -96,18 +96,43 @@ Checked the actual implementation (`base.html`'s inline script) rather than assu
 
 170/170 tests passing (up from 162 earlier this session - added 3 chunker tests and 5 pdf_extractor tests covering the section-detection heuristic and both false-positive fixes). All new tests confirmed to actually catch their target bug: reverted the relevant source file, watched them fail with the real bug's exact symptom, restored the fix, watched them pass.
 
+## Round 4: wiki legibility, real AWS deploy-blockers, and a product rename
+
+OpenSpec change: `wiki-legibility-and-deploy-fixes` (archived `2026-07-09-wiki-legibility-and-deploy-fixes`). Prompted by three asks: make sure a document only needs to be processed once for the wiki to be fully legible, find more AWS deployment problems (beyond the sqlite3 gap from round 1), and rename the product's user-facing masthead away from "Buddharauer" (the prior project's name).
+
+### Wiki legibility: dedup and summary generation are no longer separate manual steps
+
+Previously, a document only needed processing *once* to get its text and entities into the store, but the wiki wasn't fully legible until someone remembered to run `scripts/dedupe_entities.py` afterward, and each entity's wiki summary was generated lazily on first page view (a real LLM-call delay for whoever visited first). Both are now automatic: `ingest_pdf()` runs a new `_prepare_wiki_data()` step after entity extraction that (1) deduplicates across the *entire* entity store, not just the newly-ingested document - a real duplicate can span documents - and (2) generates and caches a wiki summary for every entity still missing one. Order matters: dedup runs before summarization, so a summary is never generated for an entity that's about to be merged away. Both steps are wrapped in the same "enhancement, not core to success" pattern entity extraction already uses, and the wiki's on-demand generation fallback (fixed earlier this session) still covers anything left unsummarized.
+
+### Two real, deployment-blocking bugs found by actually reading the deploy scripts
+
+Asked to look harder at AWS deployment risk turned up two bugs that would each independently have stopped a first deploy, found by reading closely rather than skimming:
+
+1. `setup_ec2.sh` installed `python3.11` via apt - Ubuntu 22.04 ships Python 3.10 by default and doesn't have 3.11 in its standard archives without adding the deadsnakes PPA. Checked whether the codebase actually needs 3.11 (no `match` statements, no `tomllib`, no `ExceptionGroup`) and found nothing that does - lowered the requirement to 3.10 everywhere (`setup_ec2.sh`, `pyproject.toml`, `README.md`) rather than adding a PPA dependency for no benefit.
+2. `nginx-buddharauer.conf` shipped with a `listen 443 ssl` server block with no certificate - nginx validates this at config-test time, *before* Certbot ever runs, and refuses to start with "no ssl_certificate is defined." That means `setup_ec2.sh`'s own `nginx -t` call would have failed before the script even finished. Rewritten to ship HTTP-only; Certbot's standard `--nginx` workflow adds the HTTPS block and redirect itself once pointed at a working HTTP vhost - this is the documented, supported way to use it, not a workaround.
+
+Neither could be verified by actually running `nginx -t` or `setup_ec2.sh` against a real host (no Linux nginx binary, no AWS account in this environment) - same category of gap as the earlier `systemctl`/`sqlite3` limitations. Reasoned through and fixed based on well-documented nginx/Ubuntu behavior, not silently assumed correct.
+
+### Masthead rename: Buddharauer -> Malifaux Document Explorer
+
+"Buddharauer" was the prior project's name and no longer fits. Renamed everywhere it's actually displayed to a user: the Gradio app's browser-tab title and on-page heading, all four wiki page `<title>` tags, the FastAPI `/docs` title, and both READMEs. Left internal infrastructure identifiers alone (systemd unit names, `/opt/buddharauer` paths, the Python package name, log messages) - those weren't part of the ask and renaming them would be a much larger, more disruptive change for no user-visible benefit.
+
+## Verification
+
+176/176 tests passing (up from 170 earlier this session - added 9 tests: 5 for the new dedup+summarize ingestion step, including one that reverts a monkeypatched failure to prove ingestion still succeeds, and confirmed no test anywhere asserted the old "Buddharauer" text before renaming it). Restarted backend and frontend on the final code; confirmed live: the masthead reads "Malifaux Document Explorer" in the browser tab and on-page, the wiki `<title>` reads "Wiki - Malifaux Document Explorer", chat still answers correctly, and a real wiki entity page still renders.
+
 ## State at end of session
 
-- `session-5` branch off `main`, holding the rate-limiting/backup work, the bug fixes, the bloat cleanup, the spec documentation pass, the sqlite3 install fix, and the chunking-boundary fix; not yet merged to `main`.
-- 9 capability specs (all synced, all with real Purpose statements), no active OpenSpec changes.
-- `design-dark` confirmed as the final frontend direction; `design-classic`/`design-modern` intentionally kept as reference, no longer an open decision.
-- Backend and frontend both restarted and smoke-tested earlier in the session; the chunking-boundary fix was verified directly against the real PDFs/text rather than through the running services.
+- `session-5` branch off `main`, holding all four rounds of this session's work; not yet merged to `main`.
+- 9 capability specs (all synced), no active OpenSpec changes.
+- `design-dark` confirmed as the final frontend direction; `design-classic`/`design-modern` intentionally kept as reference.
+- Backend and frontend both restarted and smoke-tested on the final code.
 
 ## Open items carried forward
 
 - Merge `session-5` into `main` when the user is ready.
-- Decide whether to re-ingest the live M1E/M2E data to actually benefit from the chunking-boundary fix (changes chunk IDs; orphans existing entity_mentions unless entities are also re-extracted).
-- Optionally hand-merge the one real, currently-unmerged duplicate found this session: "Governor-General's mansion" / "The Governor's Mansion" (both M1E, same place, automated dedup declined due to one having an empty description).
-- Image-processing/vision-model support remains unbuilt - see the research summary above if greenlit.
+- Decide whether to re-ingest the live M1E/M2E data to benefit from the chunking-boundary fix from round 3 (changes chunk IDs; orphans existing entity_mentions unless entities are also re-extracted) - re-ingesting now would also pick up the new automatic dedup/summary step.
+- Optionally hand-merge the one real, currently-unmerged duplicate found in round 3: "Governor-General's mansion" / "The Governor's Mansion" (both M1E, same place, automated dedup declined due to one having an empty description).
+- Image-processing/vision-model support remains unbuilt - see the round-1 research summary above if greenlit.
 - Off-host (S3) backup replication - deferred until a real AWS account exists to configure it against.
-- None of the `deploy/` artifacts have been run against a real AWS account - review before applying to a live server; the sqlite3-install gap found this session is exactly the kind of issue that only surfaces on a first real deploy.
+- None of the `deploy/` artifacts have been run against a real AWS account - two real bugs were found this session by close reading alone (sqlite3 install, Python version, Nginx TLS ordering); a real deploy attempt would be the next level of verification beyond that.
