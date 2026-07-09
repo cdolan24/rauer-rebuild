@@ -1,7 +1,7 @@
 # chat-frontend Specification
 
 ## Purpose
-TBD - created by archiving change rebuild-mvp. Update Purpose after archive.
+Defines the Gradio chat frontend: the split chat/document-viewer layout, sending and viewing messages with citations, the PDF viewer, document selection, PDF upload, and independent per-session conversation history.
 
 ## Requirements
 

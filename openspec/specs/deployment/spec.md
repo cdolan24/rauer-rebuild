@@ -1,7 +1,7 @@
 # deployment
 
 ## Purpose
-TBD - defines how the application is deployed and exposed on its hosting infrastructure (currently a single GPU-backed EC2 instance).
+Defines how the application is deployed and exposed on its hosting infrastructure (currently a single GPU-backed EC2 instance): service lifecycle, network exposure, and data backup/restore.
 
 ## Requirements
 

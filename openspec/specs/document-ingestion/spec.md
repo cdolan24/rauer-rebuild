@@ -1,7 +1,7 @@
 # document-ingestion Specification
 
 ## Purpose
-TBD - created by archiving change rebuild-mvp. Update Purpose after archive.
+Defines the pipeline that turns a PDF into searchable, cited content: text extraction, semantic chunking, embedding generation, vector storage, and the document registry that tracks per-document ingestion status.
 
 ## Requirements
 

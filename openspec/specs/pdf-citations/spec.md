@@ -1,7 +1,7 @@
 # pdf-citations Specification
 
 ## Purpose
-TBD - created by syncing change entity-wiki-and-citations. Update Purpose after archive.
+Defines how a citation in a chat answer or wiki page links back to the original source: serving the raw PDF and jumping directly to the cited page.
 
 ## Requirements
 

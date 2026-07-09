@@ -1,7 +1,7 @@
 # chat-api Specification
 
 ## Purpose
-TBD - created by archiving change rebuild-mvp. Update Purpose after archive.
+Defines the FastAPI backend's HTTP surface: chat (including streaming), conversation history, document listing/detail/upload, search, health, and admin-password verification.
 
 ## Requirements
 

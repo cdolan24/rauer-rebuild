@@ -1,7 +1,7 @@
 # wiki Specification
 
 ## Purpose
-TBD - created by syncing change entity-wiki-and-citations. Update Purpose after archive.
+Defines the auto-generated wiki: browsing extracted entities by category, individual entity pages with infoboxes and source citations, search, and navigation back to the chat frontend.
 
 ## Requirements
 

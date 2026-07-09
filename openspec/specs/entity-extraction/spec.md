@@ -1,7 +1,7 @@
 # entity-extraction Specification
 
 ## Purpose
-TBD - created by syncing change entity-wiki-and-citations. Update Purpose after archive.
+Defines how named entities (characters, locations, factions, items, real people, creatures, events) are extracted from ingested documents, classified into the curated taxonomy, indexed by mention, and deduplicated - the data the wiki is generated from.
 
 ## Requirements
 

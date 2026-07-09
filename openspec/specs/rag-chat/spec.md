@@ -1,7 +1,7 @@
 # rag-chat Specification
 
 ## Purpose
-TBD - created by archiving change rebuild-mvp. Update Purpose after archive.
+Defines the retrieve-then-generate chat behavior: answering questions from retrieved context with source citations, running entirely on local Ollama models, with bounded multi-turn history and streamed responses.
 
 ## Requirements
 

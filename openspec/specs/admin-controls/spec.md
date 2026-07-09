@@ -1,7 +1,7 @@
 # admin-controls
 
 ## Purpose
-TBD - defines admin-page capabilities for operating and inspecting the running application, restricted to authenticated admins.
+Defines admin-page capabilities for operating and inspecting the running application, restricted to authenticated admins: starting/stopping/restarting services, running direct database queries, and rate-limiting repeated failed authentication attempts.
 
 ## Requirements
 
