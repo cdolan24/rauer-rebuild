@@ -68,10 +68,8 @@ def ingest_pdf(
 
     if entity_store is not None and chat_model is not None:
         try:
-            entity_count = extract_entities_for_document(
-                chunks, document_id, ollama_client, chat_model, entity_store
-            )
-            logger.info("Extracted %d entities for %s", entity_count, document_id)
+            # extract_entities_for_document already logs its own entity count.
+            extract_entities_for_document(chunks, document_id, ollama_client, chat_model, entity_store)
         except OllamaError as e:
             # Entity tagging is an enhancement, not core to ingestion succeeding -
             # don't fail an otherwise-successful ingestion over it.

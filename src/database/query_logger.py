@@ -37,8 +37,3 @@ class QueryLogger:
                 (conversation_id, query, response_time_ms, datetime.now(timezone.utc).isoformat()),
             )
             conn.commit()
-
-    def count(self) -> int:
-        with closing(self._connect()) as conn:
-            row = conn.execute("SELECT COUNT(*) FROM query_log").fetchone()
-        return row[0] if row else 0

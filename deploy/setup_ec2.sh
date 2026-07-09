@@ -40,7 +40,7 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 echo "==> Python virtualenv + dependencies"
 sudo -u "$APP_USER" python3.11 -m venv "$APP_DIR/venv"
 sudo -u "$APP_USER" "$APP_DIR/venv/bin/pip" install --upgrade pip
-sudo -u "$APP_USER" "$APP_DIR/venv/bin/pip" install -r "$APP_DIR/requirements.txt"
+sudo -u "$APP_USER" "$APP_DIR/venv/bin/pip" install "$APP_DIR"
 
 echo "==> Pulling required Ollama models"
 ollama pull llama3.2:latest

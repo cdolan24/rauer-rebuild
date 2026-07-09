@@ -4,8 +4,8 @@ AI-powered document intelligence for Malifaux story/lore PDFs. Ingests story tex
 local vector database and answers questions about it through a citation-backed RAG chatbot,
 running entirely on local models via [Ollama](https://ollama.ai/) - no cloud API calls.
 
-See `openspec/changes/rebuild-mvp/` for the design rationale and full task breakdown behind
-this build.
+See `openspec/changes/archive/2026-07-06-rebuild-mvp/` for the design rationale and full
+task breakdown behind this build.
 
 ## Prerequisites
 
@@ -16,14 +16,13 @@ Pull the models this project uses:
 
 ```bash
 ollama pull llama3.2:latest
-ollama pull qwen2.5:latest
 ollama pull nomic-embed-text:latest
 ```
 
 ## Setup
 
 ```bash
-pip install -r requirements.txt
+pip install ".[dev]"   # omit "[dev]" if you don't need the test suite
 cp config.example.yaml config.yaml   # adjust paths/models if needed
 ```
 
@@ -62,4 +61,4 @@ pytest --cov=src --cov-report=term-missing
 
 Unit and integration tests use a fake Ollama client (see `tests/conftest.py`) so they run
 without a live Ollama service. Manual verification against the real service is documented
-in `openspec/changes/rebuild-mvp/tasks.md` (section 6).
+in `openspec/changes/archive/2026-07-06-rebuild-mvp/tasks.md` (section 6).
