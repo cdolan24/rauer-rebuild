@@ -1,0 +1,12 @@
+[Unit]
+Description=Buddharauer database + vector store backup
+
+[Service]
+Type=oneshot
+User=buddharauer
+Group=buddharauer
+WorkingDirectory=/opt/buddharauer
+Environment=BUDDHARAUER_DATA_STORAGE=/opt/buddharauer/data_storage/buddharauer.db
+Environment=BUDDHARAUER_VECTOR_DB=/opt/buddharauer/vector_db
+Environment=BUDDHARAUER_BACKUP_DIR=/opt/buddharauer/backups
+ExecStart=/opt/buddharauer/deploy/backup.sh

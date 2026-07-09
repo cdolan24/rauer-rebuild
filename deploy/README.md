@@ -96,10 +96,37 @@ systemctl restart buddharauer-backend
 journalctl -u buddharauer-backend -f   # tail logs
 ```
 
+## Backups
+
+`buddharauer-backup.timer` runs `backup.sh` once a day, producing:
+- `backups/buddharauer-<timestamp>.db` - a consistent snapshot of the application database, taken via SQLite's own online-backup mechanism (`sqlite3 ... ".backup"`), safe to run against the live, in-use database.
+- `backups/vector_db-<timestamp>.tar.gz` - a tarball of the vector store.
+
+Backups older than 7 days are pruned automatically (`BUDDHARAUER_BACKUP_RETENTION_DAYS` to change). This exists specifically because the admin page's database browser runs arbitrary, unrestricted SQL - a backup is the recovery path for a bad query, not just general disk-failure insurance.
+
+**This is local-disk-only** - it does not protect against losing the EC2 instance itself (accidental termination, disk failure). If that risk matters to you, the natural next step is periodically syncing `backups/` to S3 (e.g. `aws s3 sync`), but that requires a real AWS account/credentials to set up and hasn't been configured here.
+
+**To restore from a backup:**
+```bash
+systemctl stop buddharauer-backend buddharauer-frontend
+cp /opt/buddharauer/backups/buddharauer-<timestamp>.db /opt/buddharauer/data_storage/buddharauer.db
+rm -rf /opt/buddharauer/vector_db
+tar -xzf /opt/buddharauer/backups/vector_db-<timestamp>.tar.gz -C /opt/buddharauer
+systemctl start buddharauer-backend buddharauer-frontend
+```
+
+**To back up on demand** (e.g. right before a risky admin query): `sudo systemctl start buddharauer-backup.service`.
+
+## Admin endpoint rate limiting
+
+`/api/auth/verify`, `/api/admin/query`, `/api/documents/upload`, and the controller's `/control/*` routes all lock out a client IP for 15 minutes after 5 wrong admin-password attempts (`src/utils/rate_limiter.py`), checked before the password is even compared. This is in-process, per-service state - correct for this single-instance, single-worker-per-service deployment, but would need a shared store (Redis, a DB table) if the topology ever changed to multiple workers or hosts.
+
 ## Files in this directory
 
 - `setup_ec2.sh` - one-time instance setup (installs everything, doesn't start services).
 - `buddharauer-backend.service`, `buddharauer-frontend.service`, `buddharauer-controller.service` - systemd units.
+- `buddharauer-backup.service`, `buddharauer-backup.timer` - daily backup of the database and vector store.
+- `backup.sh` - the backup script the timer runs (see "Backups" above).
 - `sudoers-buddharauer-controller` - the controller's narrowly-scoped sudo rule.
 - `nginx-buddharauer.conf` - reverse proxy config (path-routes to backend/frontend, TLS via certbot).
 - `controller.py` - the local-only service-control daemon the admin page's Service Control section calls.

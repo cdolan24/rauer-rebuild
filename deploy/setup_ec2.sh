@@ -58,6 +58,9 @@ echo "==> Installing systemd units"
 cp "$APP_DIR/deploy/buddharauer-backend.service" /etc/systemd/system/
 cp "$APP_DIR/deploy/buddharauer-frontend.service" /etc/systemd/system/
 cp "$APP_DIR/deploy/buddharauer-controller.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/buddharauer-backup.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/buddharauer-backup.timer" /etc/systemd/system/
+chmod +x "$APP_DIR/deploy/backup.sh"
 systemctl daemon-reload
 
 echo "==> Installing sudoers rule for the controller"
@@ -72,6 +75,7 @@ nginx -t
 
 echo "==> Enabling services (not starting yet - edit config.yaml and server_name first)"
 systemctl enable buddharauer-backend buddharauer-frontend buddharauer-controller nginx
+systemctl enable --now buddharauer-backup.timer
 
 cat <<EOF
 
