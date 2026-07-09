@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import deploy.controller as controller_module
+from src.utils.rate_limiter import RateLimiter
 from tests.conftest import TEST_ADMIN_PASSWORD, write_test_config
 
 
@@ -17,6 +18,11 @@ from tests.conftest import TEST_ADMIN_PASSWORD, write_test_config
 def controller_client(tmp_path, monkeypatch):
     config_path = write_test_config(tmp_path)
     monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    # controller_module.app and its rate limiter are process-wide singletons
+    # (the controller is meant to run as one long-lived systemd process) -
+    # give each test a fresh limiter so failures in one test don't lock out
+    # a later test using the same TestClient host.
+    monkeypatch.setattr(controller_module, "_rate_limiter", RateLimiter())
     return TestClient(controller_module.app)
 
 
@@ -109,3 +115,17 @@ def test_status_rejects_wrong_password(controller_client, monkeypatch):
     )
 
     assert response.status_code == 401
+
+
+def test_repeated_wrong_passwords_lock_out_even_the_correct_password(controller_client, monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: _FakeCompletedProcess(stdout="active"))
+
+    for _ in range(5):
+        controller_client.get("/control/backend/status", params={"admin_password": "wrong"})
+
+    response = controller_client.get(
+        "/control/backend/status", params={"admin_password": TEST_ADMIN_PASSWORD}
+    )
+
+    assert response.status_code == 401
+    assert "Too many failed attempts" in response.json()["detail"]

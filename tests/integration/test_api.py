@@ -272,6 +272,16 @@ def test_verify_admin_password_rejects_wrong_password(api_client):
     assert response.status_code == 401
 
 
+def test_repeated_wrong_passwords_lock_out_even_the_correct_password(api_client):
+    for _ in range(5):
+        api_client.post("/api/auth/verify", json={"admin_password": "not-the-right-password"})
+
+    response = api_client.post("/api/auth/verify", json={"admin_password": TEST_ADMIN_PASSWORD})
+
+    assert response.status_code == 401
+    assert "Too many failed attempts" in response.json()["detail"]
+
+
 def test_admin_query_runs_select_with_correct_password(api_client):
     _seed_document(api_client)
 
@@ -312,6 +322,22 @@ def test_admin_query_rejects_wrong_password(api_client):
     )
 
     assert response.status_code == 401
+
+
+def test_admin_query_locks_out_after_repeated_wrong_passwords(api_client):
+    for _ in range(5):
+        api_client.post(
+            "/api/admin/query",
+            json={"admin_password": "not-the-right-password", "sql": "SELECT 1"},
+        )
+
+    response = api_client.post(
+        "/api/admin/query",
+        json={"admin_password": TEST_ADMIN_PASSWORD, "sql": "SELECT 1"},
+    )
+
+    assert response.status_code == 401
+    assert "Too many failed attempts" in response.json()["detail"]
 
 
 def test_admin_query_returns_400_for_invalid_sql(api_client):

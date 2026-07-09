@@ -16,26 +16,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
-from src.utils.auth import verify_admin_password
+from src.utils.auth import check_admin_password
 from src.utils.config import get_config_path, load_config
+from src.utils.rate_limiter import RateLimiter
 
 _ALLOWED_SERVICES = {"backend": "buddharauer-backend", "frontend": "buddharauer-frontend"}
 _ALLOWED_ACTIONS = {"start", "stop", "restart"}
 
 app = FastAPI(title="Buddharauer Controller")
+_rate_limiter = RateLimiter()
 
 
 class ControlRequest(BaseModel):
     admin_password: str
 
 
-def _require_admin(admin_password: str) -> None:
+def _require_admin(admin_password: str, client_key: str) -> None:
     config = load_config(get_config_path())
-    if not verify_admin_password(config.admin_password, admin_password):
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    check_admin_password(_rate_limiter, client_key, config.admin_password, admin_password)
 
 
 def _resolve_unit(service: str) -> str:
@@ -45,8 +46,8 @@ def _resolve_unit(service: str) -> str:
 
 
 @app.post("/control/{service}/{action}")
-def control(service: str, action: str, payload: ControlRequest) -> dict:
-    _require_admin(payload.admin_password)
+def control(service: str, action: str, payload: ControlRequest, request: Request) -> dict:
+    _require_admin(payload.admin_password, request.client.host)
     unit = _resolve_unit(service)
     if action not in _ALLOWED_ACTIONS:
         raise HTTPException(status_code=404, detail=f"Unknown action '{action}'")
@@ -62,8 +63,8 @@ def control(service: str, action: str, payload: ControlRequest) -> dict:
 
 
 @app.get("/control/{service}/status")
-def status(service: str, admin_password: str) -> dict:
-    _require_admin(admin_password)
+def status(service: str, admin_password: str, request: Request) -> dict:
+    _require_admin(admin_password, request.client.host)
     unit = _resolve_unit(service)
 
     # Status is read-only and doesn't need sudo - only start/stop/restart do.

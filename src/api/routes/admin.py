@@ -5,7 +5,7 @@ import sqlite3
 from fastapi import APIRouter, HTTPException, Request
 
 from src.api.schemas import AdminQueryRequest, AdminQueryResponse
-from src.utils.auth import verify_admin_password
+from src.utils.auth import check_admin_password
 
 router = APIRouter(tags=["admin"])
 
@@ -17,8 +17,12 @@ def run_query(payload: AdminQueryRequest, request: Request) -> AdminQueryRespons
     (no statement-type filtering): "direct database access" means direct
     access, with the admin password as the only trust boundary."""
     config = request.app.state.config
-    if not verify_admin_password(config.admin_password, payload.admin_password):
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    check_admin_password(
+        request.app.state.admin_rate_limiter,
+        request.client.host,
+        config.admin_password,
+        payload.admin_password,
+    )
 
     conn = sqlite3.connect(config.data_storage_path)
     try:

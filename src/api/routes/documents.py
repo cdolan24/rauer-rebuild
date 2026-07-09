@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 from src.api.schemas import DocumentContentResponse, DocumentListResponse, DocumentSummary, UploadResponse
 from src.pipeline.ingest import ingest_pdf
-from src.utils.auth import verify_admin_password
+from src.utils.auth import check_admin_password
 
 router = APIRouter(tags=["documents"])
 
@@ -91,9 +91,9 @@ async def upload_document(
     admin_password: str = Form(...),
 ) -> UploadResponse:
     config = request.app.state.config
-
-    if not verify_admin_password(config.admin_password, admin_password):
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    check_admin_password(
+        request.app.state.admin_rate_limiter, request.client.host, config.admin_password, admin_password
+    )
 
     registry = request.app.state.registry
     entity_store = request.app.state.entity_store

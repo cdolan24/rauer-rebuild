@@ -18,6 +18,7 @@ from src.rag.retriever import Retriever
 from src.utils.config import get_config_path, load_config
 from src.utils.logging import get_logger, setup_logging
 from src.utils.ollama_client import OllamaClient
+from src.utils.rate_limiter import RateLimiter
 
 logger = get_logger(__name__)
 
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
     app.state.conversation_store = conversation_store
     app.state.retriever = retriever
     app.state.chat_engine = chat_engine
+    app.state.admin_rate_limiter = RateLimiter()
 
     logger.info("Buddharauer API started.")
     yield
