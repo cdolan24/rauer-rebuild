@@ -103,3 +103,20 @@ def test_wiki_entity_page_generates_and_caches_summary(api_client):
 def test_wiki_entity_not_found(api_client):
     response = api_client.get("/wiki/entity/999999")
     assert response.status_code == 404
+
+
+def test_wiki_entity_page_falls_back_to_description_when_summary_generation_fails(
+    unhealthy_api_client,
+):
+    """Regression test: the page should still render using the entity's
+    stored description if Ollama is unreachable when a not-yet-summarized
+    entity is first viewed, rather than 500ing on an otherwise-avoidable
+    dependency (the template already falls back to the description)."""
+    store = unhealthy_api_client.app.state.entity_store
+    entity_id = store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+
+    response = unhealthy_api_client.get(f"/wiki/entity/{entity_id}")
+
+    assert response.status_code == 200
+    assert "A Guild enforcer." in response.text
+    assert store.get(entity_id).summary is None

@@ -7,9 +7,12 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from src.pipeline.entity_extractor import CURATED_ENTITY_TYPES
+from src.utils.logging import get_logger
+from src.utils.ollama_client import OllamaError
 from src.wiki.summary import generate_entity_summary
 
 router = APIRouter(tags=["wiki"])
+logger = get_logger(__name__)
 
 _templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -86,9 +89,17 @@ def wiki_entity(entity_id: int, request: Request) -> HTMLResponse:
     if not entity.summary:
         ollama_client = request.app.state.ollama_client
         chat_model = request.app.state.config.ollama.chat_model
-        summary = generate_entity_summary(entity, len(mentions), ollama_client, chat_model)
-        entity_store.set_summary(entity.id, summary)
-        entity = entity_store.get(entity.id)
+        try:
+            summary = generate_entity_summary(entity, len(mentions), ollama_client, chat_model)
+        except OllamaError as e:
+            # The summary is a nice-to-have on top of the entity's stored
+            # description (which the template already falls back to) - the
+            # page should still render if Ollama is temporarily unreachable,
+            # not 500 on every not-yet-summarized entity.
+            logger.warning("Could not generate wiki summary for entity %d: %s", entity.id, e)
+        else:
+            entity_store.set_summary(entity.id, summary)
+            entity = entity_store.get(entity.id)
 
     documents = sorted({_humanize_document_id(m.document_id) for m in mentions})
 

@@ -14,6 +14,17 @@ class ApiAuthError(ApiClientError):
     """Raised when the backend rejects a request for bad/missing credentials."""
 
 
+def _auth_error_detail(response: httpx.Response, default: str) -> str:
+    """Pull the backend's actual failure reason (e.g. "Invalid admin
+    credentials" vs. "Too many failed attempts - try again later") out of a
+    401 response instead of reporting a generic message that would hide a
+    rate-limit lockout behind a misleading "wrong password" message."""
+    try:
+        return response.json().get("detail", default)
+    except ValueError:
+        return default
+
+
 class ApiClient:
     """Thin HTTP client the Gradio frontend uses to talk to the FastAPI backend."""
 
@@ -63,7 +74,7 @@ class ApiClient:
                 timeout=self._timeout,
             )
             if response.status_code == 401:
-                raise ApiAuthError("Incorrect admin password")
+                raise ApiAuthError(_auth_error_detail(response, "Incorrect admin password"))
             response.raise_for_status()
         except httpx.HTTPError as e:
             raise ApiClientError(f"Upload failed: {e}") from e
@@ -77,7 +88,7 @@ class ApiClient:
                 timeout=self._timeout,
             )
             if response.status_code == 401:
-                raise ApiAuthError("Incorrect admin password")
+                raise ApiAuthError(_auth_error_detail(response, "Incorrect admin password"))
             if response.status_code == 400:
                 raise ApiClientError(response.json().get("detail", "Query failed"))
             response.raise_for_status()
@@ -97,6 +108,8 @@ class ApiClient:
             )
         except httpx.HTTPError as e:
             raise ApiClientError(f"Could not verify admin password: {e}") from e
+        if response.status_code == 401:
+            raise ApiAuthError(_auth_error_detail(response, "Incorrect admin password"))
         return response.status_code == 200
 
 

@@ -232,8 +232,8 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
             with open(file.name, "rb") as f:
                 content = f.read()
             result = client.upload_document(os.path.basename(file.name), content, admin_password or "")
-        except ApiAuthError:
-            return "Incorrect admin password - upload rejected."
+        except ApiAuthError as e:
+            return f"{e} - upload rejected."
         except ApiClientError as e:
             return f"Upload failed: {e}"
         return (
@@ -247,6 +247,8 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
             return hidden, hidden, hidden, "Enter the admin password.", None
         try:
             valid = client.verify_admin_password(password)
+        except ApiAuthError as e:
+            return hidden, hidden, hidden, str(e), None
         except ApiClientError as e:
             return hidden, hidden, hidden, f"Could not reach the backend: {e}", None
         if not valid:
@@ -261,8 +263,8 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
             return None, "Enter a SQL query."
         try:
             result = client.run_admin_query(sql, admin_password or "")
-        except ApiAuthError:
-            return None, "Incorrect admin password."
+        except ApiAuthError as e:
+            return None, str(e)
         except ApiClientError as e:
             return None, f"Query failed: {e}"
         if result["rows_affected"] is not None:
@@ -273,8 +275,8 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
     def control_service(service, action, admin_password):
         try:
             controller_client.control(service, action, admin_password or "")
-        except ApiAuthError:
-            return "Incorrect admin password."
+        except ApiAuthError as e:
+            return str(e)
         except ApiClientError as e:
             return f"{service} {action} failed: {e}"
         return f"{service}: {action} succeeded."
@@ -285,8 +287,8 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
             try:
                 result = controller_client.status(service, admin_password or "")
                 statuses.append(f"**{service}**: {result['status']}")
-            except ApiAuthError:
-                return "Incorrect admin password."
+            except ApiAuthError as e:
+                return str(e)
             except ApiClientError as e:
                 statuses.append(f"**{service}**: unreachable ({e})")
         return " &nbsp;|&nbsp; ".join(statuses)
