@@ -1,6 +1,6 @@
 # Session 4
 
-**Branch:** `session-4` (not yet merged to `main`)
+**Branch:** `session-4` (merged into `main` at the end of this session)
 **OpenSpec changes:** `wiki-taxonomy-and-navigation` (archived `2026-07-08-wiki-taxonomy-and-navigation`), `entity-dedup-and-session-isolation` (archived `2026-07-08-entity-dedup-and-session-isolation`), `deployment-and-admin-controls` (archived `2026-07-08-deployment-and-admin-controls`)
 
 ## What shipped
@@ -83,20 +83,43 @@ Verified locally as far as this Windows dev machine allows: the controller's req
 
 145/145 tests passing (up from 134 at the end of round 2 - added admin-query and controller tests). All three design branches and the deployment/admin-controls work verified via live Playwright passes against locally-running instances.
 
+## Round 4: chat frontend theme adoption, document-processing estimate, grounded-vs-inferred prompting
+
+The user picked `design-dark` as the winning direction (already merged into `session-4` in round 3) and asked for the same style to be carried into the chat frontend specifically, then asked two scoping questions about the deployed system and one more prompt-engineering request before wrapping the session.
+
+### Chat frontend restyled to match `design-dark`
+
+New branch `chat-frontend-dark` off `session-4`: added a matching `gr.themes.Base` override (Cinzel/EB Garamond, crimson/gold accents) and a CSS block to `src/frontend/app.py`. Needed one extra pass after the first screenshot: `gr.Dataframe` doesn't inherit the theme's dark palette at all (renders white regardless of theme config) and had to be forced dark via explicit CSS targeting `.table-wrap`. Verified via Playwright screenshots of a populated chat with a citation selected, then merged back into `session-4` (clean merge, no conflicts) at the end of this round.
+
+### Document-processing time estimate
+
+The user asked how long ingesting a new document takes. Rather than reuse older, pre-optimization figures from earlier sessions, ran a real, isolated benchmark (temp-storage `DocumentRegistry`/`VectorStore`/`EntityStore`, a real 30-page slice of the M1E PDF) timing each pipeline stage separately: PDF extraction, chunking, embedding, vector insert, and entity extraction. Entity extraction needed a re-run with a longer client timeout (600s) after the first attempt's batches all hit the config's normal 180s request timeout and returned a false "0 entities" reading. Extrapolated the clean per-stage numbers to a full ~700-page document using the actual 8-worker concurrency model (wall-clock ≈ `ceil(batches / 8) × per-batch time`, not naive linear scaling), giving the user a real estimate broken down by stage instead of a guess.
+
+### Confirmed: fully local/tokenless, no image processing yet
+
+Two scoping questions, answered by inspection rather than assumption: grepped the whole pipeline for any image/vision usage (`llava`, `vision`, `get_pixmap`, `get_images`) and found none - `pdf_extractor.py` only ever calls `page.get_text()`. Confirmed the entire stack (embeddings, chat, entity extraction) runs through local Ollama with no external API keys, so the "tokenless" framing holds today and continues to hold once deployed to the user's own AWS instance. `llava:latest` and `llama3.2-vision:latest` are already pulled locally from earlier session exploration but are not wired into anything - noted as a real option, not built, per the user's explicit instruction to defer it to session 5 (see Open items).
+
+### Grounded-vs-inferred answer structure
+
+`src/rag/prompt_builder.py`'s `SYSTEM_PROMPT` now explicitly instructs the model to structure every answer as a `**From the documents:**` section (facts directly traceable to the attached citations) followed by an optional `Interpretation:` section (reasoning that goes beyond what the context explicitly states, omitted entirely when not needed). The citations mechanism itself was already fully programmatic (attached from retrieved-chunk metadata, never LLM-generated) - this change is about making the *answer text* itself legible about what's grounded vs. inferred. Existing tests only assert message-list structure, not exact prompt wording, so no test changes were needed. Verified live against the real vector store and Ollama with "Who is Lady Justice?" - the model followed the two-part structure correctly on the first attempt, correctly separating stated facts (her role as Death Marshal captain) from actual inference (reading her line "Do I even have to be here?" as implying doubt about her role).
+
+## Verification
+
+145/145 tests passing (full suite - unit, integration, e2e) after the `chat-frontend-dark` merge and the prompt change. Also ran a temp-storage benchmark script for the document-processing estimate and a live retriever/Ollama round-trip against the real vector store for the prompt-structure verification.
+
 ## State at end of session
 
-- `session-4` branch (not merged to `main` yet - stays isolated per this project's established session-branching convention until explicitly asked to merge). Deployment/admin-controls work committed directly to `session-4`.
-- `design-classic`, `design-modern`, `design-dark` branches created off `session-4`, each independently mergeable, all pushed to `origin`.
-- 145/145 tests, 9 capability specs (all synced, including two brand-new ones: `deployment` and `admin-controls`), no active OpenSpec changes.
-- Backend (port 8000) and frontend (port 7860) running with the `session-4` build; each design branch also has its own backend/frontend pair running on distinct ports (8010/7810, 8020/7820, 8030/7830) for side-by-side comparison, all sharing the same underlying data via absolute-path configs.
+- `session-4` merged into `main` and pushed to `origin` - this is the first session-4 round to land on `main`.
+- `chat-frontend-dark` merged into `session-4` (and therefore into `main`); `design-classic` and `design-modern` remain separate, unmerged exploration branches on `origin` in case the user wants to revisit them later.
+- `deploy/controller.py`, the AWS EC2 setup script, and the admin database/service-control panel all shipped as part of this merge - still unexercised against a real AWS account (see open items).
 - The `../rauer-rebuild-session2-demo` worktree from session 3 still exists on disk (not removed) - stale, harmless.
-- `llama3.2:1b` remains pulled locally (from session 3's model investigation) but is not referenced by any config.
-- `deploy/controller.py` is running locally on port 8100 for verification purposes - not part of the production topology as-is (that's systemd's job in a real deployment).
+- `llama3.2:1b`, `llava:latest`, and `llama3.2-vision:latest` remain pulled locally but are not referenced by any config.
 
 ## Open items carried forward
 
+- **Session 5: look into an image-processing/vision model.** The current pipeline is text-only (`page.get_text()`); `llava:latest` and `llama3.2-vision:latest` are already pulled locally and unused. User explicitly asked to defer any action on this until session 5 starts - do not build against it before then.
 - None of the `deploy/` artifacts have been exercised against a real AWS account - review before applying to a live server.
-- No design branch has been chosen/merged yet - all three remain as options alongside the `session-4` baseline.
-- Chunking can straddle story boundaries in the M1E/M2E anthologies - explicitly deferred again this session (highest uncertainty/cost of the remaining items: needs re-extraction with font/heading metadata, re-chunking, and re-embedding, plus heuristic boundary-detection is inherently imperfect).
+- `design-classic` and `design-modern` remain unmerged, undecided alternatives to the now-adopted dark theme.
+- Chunking can straddle story boundaries in the M1E/M2E anthologies - deferred again (needs font/heading-aware re-extraction, re-chunking, and re-embedding; heuristic boundary detection is inherently imperfect).
 - Client-side wiki search (session 3) doesn't scale indefinitely - revisit if entity count grows an order of magnitude.
-- The dynamic-tag threshold (3 entities, from the taxonomy round) and the dedup similarity threshold (0.7) are both untuned judgment calls, not derived from any real precision/recall measurement - fine at current scale, worth revisiting if either mechanism starts misbehaving as more documents are ingested.
+- The dynamic-tag threshold (3 entities) and dedup similarity threshold (0.7) are untuned judgment calls - fine at current scale, worth revisiting as more documents are ingested.
