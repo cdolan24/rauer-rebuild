@@ -15,7 +15,7 @@ REPO_URL="${BUDDHARAUER_REPO_URL:?Set BUDDHARAUER_REPO_URL to the repo clone URL
 
 echo "==> Installing system dependencies"
 apt-get update
-apt-get install -y python3.11 python3.11-venv nginx certbot python3-certbot-nginx git curl
+apt-get install -y python3.11 python3.11-venv nginx certbot python3-certbot-nginx git curl sqlite3
 
 echo "==> Installing NVIDIA driver (if not already present) + Ollama"
 # If you launched from a "Deep Learning AMI" the driver is already installed
