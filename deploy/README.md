@@ -1,6 +1,6 @@
-# Deploying Buddharauer to AWS
+# Deploying Malifaux Document Explorer to AWS
 
-This directory has everything needed to run Buddharauer on a single AWS EC2
+This directory has everything needed to run Malifaux Document Explorer on a single AWS EC2
 instance: a setup script, systemd unit files, an Nginx reverse-proxy config,
 a sudoers rule, and the local service-control daemon the admin page talks to.
 

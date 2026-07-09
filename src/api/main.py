@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Buddharauer API", lifespan=lifespan)
+    app = FastAPI(title="Malifaux Document Explorer API", lifespan=lifespan)
 
     config = load_config(get_config_path())
     app.add_middleware(

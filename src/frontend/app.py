@@ -133,7 +133,7 @@ def _format_citation_label(source: dict) -> str:
 
 def _pdf_viewer_html(api_base_url: str, document_id: str, page: int) -> str:
     """Embed the real PDF (not the processed text) at the given page, so the
-    user reads the same document Buddharauer cites from."""
+    user reads the same document the app cites from."""
     url = f"{api_base_url}/api/documents/{document_id}/pdf#page={page}"
     title = _humanize_document_id(document_id)
     return (
@@ -294,7 +294,7 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
         return " &nbsp;|&nbsp; ".join(statuses)
 
     with gr.Blocks(
-        title="Buddharauer", head=_ENTER_TO_SEND_JS, theme=_DARK_THEME, css=_DARK_CSS
+        title="Malifaux Document Explorer", head=_ENTER_TO_SEND_JS, theme=_DARK_THEME, css=_DARK_CSS
     ) as demo:
         # A callable default is invoked fresh per browser session by Gradio -
         # a plain str(uuid.uuid4()) would be computed once at app-build time
@@ -302,7 +302,7 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
         conversation_id = gr.State(lambda: str(uuid.uuid4()))
         sources_state = gr.State([])
 
-        gr.Markdown("# Buddharauer - Malifaux Document Explorer")
+        gr.Markdown("# Malifaux Document Explorer")
         gr.HTML(f'<a class="wiki-link" href="{api_base_url}/wiki" target="_blank">Browse the Wiki</a>')
 
         with gr.Row():
