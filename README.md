@@ -1,4 +1,4 @@
-# Buddharauer
+# Malifaux Document Explorer
 
 AI-powered document intelligence for Malifaux story/lore PDFs. Ingests story text into a
 local vector database and answers questions about it through a citation-backed RAG chatbot,
@@ -9,7 +9,7 @@ task breakdown behind this build.
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.10+
 - [Ollama](https://ollama.ai/) installed and running
 
 Pull the models this project uses:

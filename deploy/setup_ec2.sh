@@ -15,7 +15,11 @@ REPO_URL="${BUDDHARAUER_REPO_URL:?Set BUDDHARAUER_REPO_URL to the repo clone URL
 
 echo "==> Installing system dependencies"
 apt-get update
-apt-get install -y python3.11 python3.11-venv nginx certbot python3-certbot-nginx git curl sqlite3
+# Ubuntu 22.04 ships Python 3.10 by default - python3.11 isn't in the
+# standard archives (it needs the deadsnakes PPA) and nothing here actually
+# requires 3.11, so use the system python3 rather than a version apt-get
+# would fail to find on a vanilla instance.
+apt-get install -y python3 python3-venv nginx certbot python3-certbot-nginx git curl sqlite3
 
 echo "==> Installing NVIDIA driver (if not already present) + Ollama"
 # If you launched from a "Deep Learning AMI" the driver is already installed
@@ -38,7 +42,7 @@ fi
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 echo "==> Python virtualenv + dependencies"
-sudo -u "$APP_USER" python3.11 -m venv "$APP_DIR/venv"
+sudo -u "$APP_USER" python3 -m venv "$APP_DIR/venv"
 sudo -u "$APP_USER" "$APP_DIR/venv/bin/pip" install --upgrade pip
 sudo -u "$APP_USER" "$APP_DIR/venv/bin/pip" install "$APP_DIR"
 
