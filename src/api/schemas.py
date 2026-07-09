@@ -87,3 +87,14 @@ class AdminAuthRequest(BaseModel):
 
 class AdminAuthResponse(BaseModel):
     valid: bool
+
+
+class AdminQueryRequest(BaseModel):
+    admin_password: str
+    sql: str
+
+
+class AdminQueryResponse(BaseModel):
+    columns: list[str]
+    rows: list[list]
+    rows_affected: int | None = None

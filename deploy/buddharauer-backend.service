@@ -1,0 +1,16 @@
+[Unit]
+Description=Buddharauer FastAPI backend
+After=network.target
+
+[Service]
+Type=simple
+User=buddharauer
+Group=buddharauer
+WorkingDirectory=/opt/buddharauer
+Environment=BUDDHARAUER_CONFIG=/opt/buddharauer/config.yaml
+ExecStart=/opt/buddharauer/venv/bin/python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

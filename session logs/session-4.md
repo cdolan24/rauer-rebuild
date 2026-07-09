@@ -1,7 +1,7 @@
 # Session 4
 
 **Branch:** `session-4` (not yet merged to `main`)
-**OpenSpec changes:** `wiki-taxonomy-and-navigation` (archived `2026-07-08-wiki-taxonomy-and-navigation`), `entity-dedup-and-session-isolation` (archived `2026-07-08-entity-dedup-and-session-isolation`)
+**OpenSpec changes:** `wiki-taxonomy-and-navigation` (archived `2026-07-08-wiki-taxonomy-and-navigation`), `entity-dedup-and-session-isolation` (archived `2026-07-08-entity-dedup-and-session-isolation`), `deployment-and-admin-controls` (archived `2026-07-08-deployment-and-admin-controls`)
 
 ## What shipped
 
@@ -52,16 +52,51 @@ Applied via `scripts/dedupe_entities.py --dry-run` (reviewed) then for real, aft
 
 134/134 tests passing (up from 120 at the end of round 1 - added `merge_entities` tests, candidate-pair/union-find unit tests, pairwise-confirmation integration tests with fake Ollama clients covering transitive chains and failure handling). Backend + frontend restarted after each round; live Playwright/query-log verification confirmed both the session-isolation fix and the deduplicated wiki data.
 
+## Round 3: frontend design exploration + deployment/admin controls
+
+The user flagged the frontend (especially the wiki) as still visually rough, and asked for a few different design directions to compare, plus asked to start planning real AWS deployment with admin controls (start/stop the backend, direct database access).
+
+### Three design-exploration branches
+
+Branched off `session-4` (not merged into it): `design-classic`, `design-modern`, `design-dark`. Each restyles both the wiki (`base.html`) and the chat frontend (a matching `gr.Theme` + CSS) as one cohesive identity, sharing the same underlying data:
+
+- **`design-classic`**: a refined version of the app's original serif/dark-red look - warm parchment background, Playfair Display headlines, deepened burgundy palette.
+- **`design-modern`**: a clean, contemporary light theme - Inter sans-serif, blue accent, card-based surfaces with soft shadows.
+- **`design-dark`**: a full dark mode leaning into Malifaux's gothic-horror atmosphere - near-black background, Cinzel display-serif titles, crimson/gold accents. Needed a second pass after the first screenshot showed secondary buttons ("Clear chat", "Refresh document list") and placeholder text staying illegibly light-on-dark - Gradio's secondary-button and prose-text color variables weren't covered by the first theme override and had to be added explicitly.
+
+All three verified visually via Playwright screenshots, 134/134 tests passing on each, all pushed to `origin`.
+
+### Deployment: single GPU-backed EC2 instance, not ECS/Fargate
+
+The user's instruction was conditional: use ECS/Fargate only if it would actually speed up chat responses. Checked the premise directly rather than guessing: **AWS Fargate cannot attach a GPU at all** - a hard platform limitation (GPU support on ECS requires the EC2 launch type, not Fargate). Since this session's earlier diagnosis already pinned the "thinking" delay on CPU-bound Ollama inference, container orchestration was never going to be the lever that helps - only GPU compute is. So the deployment artifacts target a single `g4dn.xlarge`-class EC2 instance instead: systemd units for the backend/frontend, an Nginx reverse proxy (path-routing `/api/*` and `/wiki*` to the backend, everything else to the frontend, TLS via Certbot), a security-group policy exposing only 80/443/restricted-SSH, and a setup script. None of this was run against a real AWS account (no credentials in this environment) - it's reviewed-but-unexecuted infrastructure for the user to apply.
+
+### Admin controls: database browser + remote service control
+
+Two new sections on the existing password-gated admin page:
+
+- **Database Browser**: a new admin-gated `POST /api/admin/query` endpoint runs arbitrary SQL against the SQLite database and returns results - deliberately unrestricted (no read-only mode), since "direct database access" means direct access and the admin password is the same trust boundary PDF upload already has.
+- **Service Control**: start/stop/restart/status for the backend and frontend from the browser, without SSH. A live process cleanly restarting *itself* mid-HTTP-request is architecturally awkward, so this goes through a separate, minimal `buddharauer-controller` process (its own systemd unit) holding a `sudoers.d` rule scoped to *exactly* `systemctl {start,stop,restart}` on the app's two units - nothing else, never reachable from outside the instance.
+
+Verified locally as far as this Windows dev machine allows: the controller's request validation (auth gating, service/action whitelisting, systemctl-failure handling) is covered by 7 mocked unit tests, and the admin page's UI was verified live via Playwright (unlock, run a real SQL query against the actual entity data, trigger a status refresh). The actual `systemctl` execution can only be verified on a real Linux host - confirmed the auth path works correctly (wrong password never reaches the subprocess call; correct password does) but the command itself predictably fails with "command not found" on Windows, which is expected and not a bug.
+
+## Verification
+
+145/145 tests passing (up from 134 at the end of round 2 - added admin-query and controller tests). All three design branches and the deployment/admin-controls work verified via live Playwright passes against locally-running instances.
+
 ## State at end of session
 
-- `session-4` branch (not merged to `main` yet - stays isolated per this project's established session-branching convention until explicitly asked to merge).
-- 134/134 tests, 7 capability specs (all synced), no active OpenSpec changes.
-- Backend (port 8000) and frontend (port 7860) running with this session's build.
-- The `../rauer-rebuild-session2-demo` worktree from session 3 still exists on disk (not removed), currently just a stale extra checkout of `main` - harmless but no longer serving any purpose now that `main`/`session-3` content has moved on.
-- `llama3.2:1b` remains pulled locally (from the model investigation) but is not referenced by any config - harmless, just disk space, available for any future re-evaluation.
+- `session-4` branch (not merged to `main` yet - stays isolated per this project's established session-branching convention until explicitly asked to merge). Deployment/admin-controls work committed directly to `session-4`.
+- `design-classic`, `design-modern`, `design-dark` branches created off `session-4`, each independently mergeable, all pushed to `origin`.
+- 145/145 tests, 9 capability specs (all synced, including two brand-new ones: `deployment` and `admin-controls`), no active OpenSpec changes.
+- Backend (port 8000) and frontend (port 7860) running with the `session-4` build; each design branch also has its own backend/frontend pair running on distinct ports (8010/7810, 8020/7820, 8030/7830) for side-by-side comparison, all sharing the same underlying data via absolute-path configs.
+- The `../rauer-rebuild-session2-demo` worktree from session 3 still exists on disk (not removed) - stale, harmless.
+- `llama3.2:1b` remains pulled locally (from session 3's model investigation) but is not referenced by any config.
+- `deploy/controller.py` is running locally on port 8100 for verification purposes - not part of the production topology as-is (that's systemd's job in a real deployment).
 
 ## Open items carried forward
 
+- None of the `deploy/` artifacts have been exercised against a real AWS account - review before applying to a live server.
+- No design branch has been chosen/merged yet - all three remain as options alongside the `session-4` baseline.
 - Chunking can straddle story boundaries in the M1E/M2E anthologies - explicitly deferred again this session (highest uncertainty/cost of the remaining items: needs re-extraction with font/heading metadata, re-chunking, and re-embedding, plus heuristic boundary-detection is inherently imperfect).
 - Client-side wiki search (session 3) doesn't scale indefinitely - revisit if entity count grows an order of magnitude.
 - The dynamic-tag threshold (3 entities, from the taxonomy round) and the dedup similarity threshold (0.7) are both untuned judgment calls, not derived from any real precision/recall measurement - fine at current scale, worth revisiting if either mechanism starts misbehaving as more documents are ingested.

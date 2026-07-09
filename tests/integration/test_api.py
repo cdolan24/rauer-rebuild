@@ -272,6 +272,57 @@ def test_verify_admin_password_rejects_wrong_password(api_client):
     assert response.status_code == 401
 
 
+def test_admin_query_runs_select_with_correct_password(api_client):
+    _seed_document(api_client)
+
+    response = api_client.post(
+        "/api/admin/query",
+        json={"admin_password": TEST_ADMIN_PASSWORD, "sql": "SELECT document_id, status FROM documents"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["columns"] == ["document_id", "status"]
+    assert ["fellowship", "processed"] in data["rows"]
+    assert data["rows_affected"] is None
+
+
+def test_admin_query_returns_affected_row_count_for_non_select(api_client):
+    _seed_document(api_client)
+
+    response = api_client.post(
+        "/api/admin/query",
+        json={
+            "admin_password": TEST_ADMIN_PASSWORD,
+            "sql": "UPDATE documents SET status = 'processed' WHERE document_id = 'fellowship'",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["rows_affected"] == 1
+    assert data["columns"] == []
+    assert data["rows"] == []
+
+
+def test_admin_query_rejects_wrong_password(api_client):
+    response = api_client.post(
+        "/api/admin/query",
+        json={"admin_password": "not-the-right-password", "sql": "SELECT 1"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_admin_query_returns_400_for_invalid_sql(api_client):
+    response = api_client.post(
+        "/api/admin/query",
+        json={"admin_password": TEST_ADMIN_PASSWORD, "sql": "NOT VALID SQL"},
+    )
+
+    assert response.status_code == 400
+
+
 def test_verify_admin_password_rejects_when_none_configured(tmp_path, monkeypatch):
     import src.api.main as main_module
     from fastapi.testclient import TestClient

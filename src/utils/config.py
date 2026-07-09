@@ -63,6 +63,8 @@ class Config:
     rag_min_score: float
     rag_max_history_turns: int
     admin_password: str | None
+    controller_port: int
+    controller_url: str
 
 
 class ConfigError(Exception):
@@ -134,6 +136,9 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         rag_min_score=float(raw.get("rag", {}).get("min_score", 0.55)),
         rag_max_history_turns=int(raw.get("rag", {}).get("max_history_turns", 3)),
         admin_password=_resolve_admin_password(raw.get("auth", {}).get("admin_password")),
+        controller_port=int(raw.get("controller", {}).get("port", 8100)),
+        controller_url=raw.get("controller", {}).get("url")
+        or f"http://127.0.0.1:{int(raw.get('controller', {}).get('port', 8100))}",
     )
 
 

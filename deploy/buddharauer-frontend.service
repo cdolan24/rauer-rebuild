@@ -1,0 +1,17 @@
+[Unit]
+Description=Buddharauer Gradio frontend
+After=network.target buddharauer-backend.service
+Wants=buddharauer-backend.service
+
+[Service]
+Type=simple
+User=buddharauer
+Group=buddharauer
+WorkingDirectory=/opt/buddharauer
+Environment=BUDDHARAUER_CONFIG=/opt/buddharauer/config.yaml
+ExecStart=/opt/buddharauer/venv/bin/python src/frontend/app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

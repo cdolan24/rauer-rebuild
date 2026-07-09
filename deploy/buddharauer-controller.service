@@ -1,0 +1,18 @@
+[Unit]
+Description=Buddharauer local service-control daemon (admin start/stop/restart)
+After=network.target
+
+[Service]
+Type=simple
+# Dedicated, unprivileged user - its only elevated capability is the narrow
+# sudoers.d rule installed separately (see sudoers-buddharauer-controller).
+User=buddharauer-controller
+Group=buddharauer-controller
+WorkingDirectory=/opt/buddharauer
+Environment=BUDDHARAUER_CONFIG=/opt/buddharauer/config.yaml
+ExecStart=/opt/buddharauer/venv/bin/python deploy/controller.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

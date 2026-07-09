@@ -69,3 +69,10 @@ auth:
   # Required to enable PDF upload. Left as "changeme" (or unset), uploads are
   # rejected entirely - set this to a real value in your local config.yaml.
   admin_password: "changeme"
+
+controller:
+  # The local-only service-control daemon (deploy/controller.py) the admin
+  # page's Service Control section talks to. Only meaningful in a deployed
+  # environment - locally, the controller doesn't need to be running unless
+  # you're testing that section of the admin page.
+  port: 8100

@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
 import gradio as gr
 
-from src.frontend.api_client import ApiAuthError, ApiClient, ApiClientError
+from src.frontend.api_client import ApiAuthError, ApiClient, ApiClientError, ControllerClient
 from src.utils.config import get_config_path, load_config
 
 # Gradio's multiline Textbox submits on Enter regardless of the Shift key.
@@ -77,7 +77,7 @@ def _pdf_viewer_html(api_base_url: str, document_id: str, page: int) -> str:
     )
 
 
-def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
+def build_app(client: ApiClient, api_base_url: str, controller_client: ControllerClient) -> gr.Blocks:
     def send_message(message, history, conversation_id, sources_state):
         history = history or []
         if not message.strip():
@@ -177,15 +177,54 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
         )
 
     def unlock_admin(password):
+        hidden = gr.update(visible=False)
         if not password:
-            return gr.update(visible=False), "Enter the admin password.", None
+            return hidden, hidden, hidden, "Enter the admin password.", None
         try:
             valid = client.verify_admin_password(password)
         except ApiClientError as e:
-            return gr.update(visible=False), f"Could not reach the backend: {e}", None
+            return hidden, hidden, hidden, f"Could not reach the backend: {e}", None
         if not valid:
-            return gr.update(visible=False), "Incorrect admin password.", None
-        return gr.update(visible=True), "Unlocked.", password
+            return hidden, hidden, hidden, "Incorrect admin password.", None
+        shown = gr.update(visible=True)
+        return shown, shown, shown, "Unlocked.", password
+
+    def run_admin_query(sql, admin_password):
+        import pandas as pd
+
+        if not sql or not sql.strip():
+            return None, "Enter a SQL query."
+        try:
+            result = client.run_admin_query(sql, admin_password or "")
+        except ApiAuthError:
+            return None, "Incorrect admin password."
+        except ApiClientError as e:
+            return None, f"Query failed: {e}"
+        if result["rows_affected"] is not None:
+            return None, f"{result['rows_affected']} row(s) affected."
+        df = pd.DataFrame(result["rows"], columns=result["columns"])
+        return df, f"{len(result['rows'])} row(s) returned."
+
+    def control_service(service, action, admin_password):
+        try:
+            controller_client.control(service, action, admin_password or "")
+        except ApiAuthError:
+            return "Incorrect admin password."
+        except ApiClientError as e:
+            return f"{service} {action} failed: {e}"
+        return f"{service}: {action} succeeded."
+
+    def refresh_service_status(admin_password):
+        statuses = []
+        for service in ("backend", "frontend"):
+            try:
+                result = controller_client.status(service, admin_password or "")
+                statuses.append(f"**{service}**: {result['status']}")
+            except ApiAuthError:
+                return "Incorrect admin password."
+            except ApiClientError as e:
+                statuses.append(f"**{service}**: unreachable ({e})")
+        return " &nbsp;|&nbsp; ".join(statuses)
 
     with gr.Blocks(title="Buddharauer", head=_ENTER_TO_SEND_JS) as demo:
         # A callable default is invoked fresh per browser session by Gradio -
@@ -248,31 +287,75 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
     with demo.route("Admin", "/admin"):
         admin_password_state = gr.State(None)
 
-        gr.Markdown("# Admin - Upload New PDFs")
-        gr.Markdown("Enter the admin password to unlock the upload form.")
+        gr.Markdown("# Admin")
+        gr.Markdown("Enter the admin password to unlock admin controls.")
 
         unlock_password_box = gr.Textbox(label="Admin password", type="password")
         unlock_btn = gr.Button("Unlock", variant="primary")
         unlock_status = gr.Markdown("")
 
         with gr.Group(visible=False) as upload_group:
+            gr.Markdown("### Upload New PDFs")
             upload_file = gr.File(label="PDF file", file_types=[".pdf"])
             upload_status = gr.Markdown("")
+
+        with gr.Group(visible=False) as db_browser_group:
+            gr.Markdown("### Database Browser")
+            sql_box = gr.Textbox(
+                label="SQL query", placeholder="SELECT * FROM entities LIMIT 10", lines=3
+            )
+            run_query_btn = gr.Button("Run query")
+            query_status = gr.Markdown("")
+            query_result = gr.Dataframe(label="Results", interactive=False)
+
+        with gr.Group(visible=False) as service_control_group:
+            gr.Markdown("### Service Control")
+            service_status_text = gr.Markdown("")
+            refresh_status_btn = gr.Button("Refresh status")
+            with gr.Row():
+                gr.Markdown("**Backend**")
+                backend_start_btn = gr.Button("Start")
+                backend_stop_btn = gr.Button("Stop")
+                backend_restart_btn = gr.Button("Restart")
+            with gr.Row():
+                gr.Markdown("**Frontend**")
+                frontend_start_btn = gr.Button("Start")
+                frontend_stop_btn = gr.Button("Stop")
+                frontend_restart_btn = gr.Button("Restart")
+            service_action_status = gr.Markdown("")
 
         unlock_btn.click(
             unlock_admin,
             inputs=[unlock_password_box],
-            outputs=[upload_group, unlock_status, admin_password_state],
+            outputs=[upload_group, db_browser_group, service_control_group, unlock_status, admin_password_state],
         )
         unlock_password_box.submit(
             unlock_admin,
             inputs=[unlock_password_box],
-            outputs=[upload_group, unlock_status, admin_password_state],
+            outputs=[upload_group, db_browser_group, service_control_group, unlock_status, admin_password_state],
         )
 
         upload_file.upload(
             upload_document, inputs=[upload_file, admin_password_state], outputs=[upload_status]
         )
+
+        run_query_btn.click(
+            run_admin_query, inputs=[sql_box, admin_password_state], outputs=[query_result, query_status]
+        )
+
+        refresh_status_btn.click(
+            refresh_service_status, inputs=[admin_password_state], outputs=[service_status_text]
+        )
+        for service, start_btn, stop_btn, restart_btn in [
+            ("backend", backend_start_btn, backend_stop_btn, backend_restart_btn),
+            ("frontend", frontend_start_btn, frontend_stop_btn, frontend_restart_btn),
+        ]:
+            for action, btn in [("start", start_btn), ("stop", stop_btn), ("restart", restart_btn)]:
+                btn.click(
+                    lambda pw, service=service, action=action: control_service(service, action, pw),
+                    inputs=[admin_password_state],
+                    outputs=[service_action_status],
+                )
 
     return demo
 
@@ -280,7 +363,8 @@ def build_app(client: ApiClient, api_base_url: str) -> gr.Blocks:
 def main() -> None:
     config = load_config(get_config_path())
     client = ApiClient(config.frontend.api_base_url, timeout=config.frontend.request_timeout)
-    demo = build_app(client, config.frontend.api_base_url)
+    controller_client = ControllerClient(config.controller_url)
+    demo = build_app(client, config.frontend.api_base_url, controller_client)
     demo.launch(server_port=config.frontend.port)
 
 

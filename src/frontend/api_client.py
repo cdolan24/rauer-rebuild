@@ -69,6 +69,22 @@ class ApiClient:
             raise ApiClientError(f"Upload failed: {e}") from e
         return response.json()
 
+    def run_admin_query(self, sql: str, admin_password: str) -> dict:
+        try:
+            response = httpx.post(
+                f"{self._base_url}/api/admin/query",
+                json={"admin_password": admin_password, "sql": sql},
+                timeout=self._timeout,
+            )
+            if response.status_code == 401:
+                raise ApiAuthError("Incorrect admin password")
+            if response.status_code == 400:
+                raise ApiClientError(response.json().get("detail", "Query failed"))
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"Query failed: {e}") from e
+        return response.json()
+
     def health(self) -> dict:
         return self._request("GET", "/api/health")
 
@@ -82,3 +98,40 @@ class ApiClient:
         except httpx.HTTPError as e:
             raise ApiClientError(f"Could not verify admin password: {e}") from e
         return response.status_code == 200
+
+
+class ControllerClient:
+    """Thin HTTP client for the local service-control daemon
+    (deploy/controller.py) - a separate process/base_url from the backend."""
+
+    def __init__(self, base_url: str, timeout: float = 10.0) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
+
+    def control(self, service: str, action: str, admin_password: str) -> dict:
+        try:
+            response = httpx.post(
+                f"{self._base_url}/control/{service}/{action}",
+                json={"admin_password": admin_password},
+                timeout=self._timeout,
+            )
+            if response.status_code == 401:
+                raise ApiAuthError("Incorrect admin password")
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"Service control failed: {e}") from e
+        return response.json()
+
+    def status(self, service: str, admin_password: str) -> dict:
+        try:
+            response = httpx.get(
+                f"{self._base_url}/control/{service}/status",
+                params={"admin_password": admin_password},
+                timeout=self._timeout,
+            )
+            if response.status_code == 401:
+                raise ApiAuthError("Incorrect admin password")
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"Could not fetch status: {e}") from e
+        return response.json()

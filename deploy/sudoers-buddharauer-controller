@@ -1,0 +1,14 @@
+# Install with: sudo install -m 0440 deploy/sudoers-buddharauer-controller /etc/sudoers.d/buddharauer-controller
+# Then validate with: sudo visudo -c
+#
+# Grants the buddharauer-controller system user passwordless sudo for
+# EXACTLY these six commands - nothing else. This is the entire privilege
+# boundary for deploy/controller.py; do not widen it (e.g. no wildcard
+# "systemctl *", no shell access).
+
+buddharauer-controller ALL=(root) NOPASSWD: /usr/bin/systemctl start buddharauer-backend
+buddharauer-controller ALL=(root) NOPASSWD: /usr/bin/systemctl stop buddharauer-backend
+buddharauer-controller ALL=(root) NOPASSWD: /usr/bin/systemctl restart buddharauer-backend
+buddharauer-controller ALL=(root) NOPASSWD: /usr/bin/systemctl start buddharauer-frontend
+buddharauer-controller ALL=(root) NOPASSWD: /usr/bin/systemctl stop buddharauer-frontend
+buddharauer-controller ALL=(root) NOPASSWD: /usr/bin/systemctl restart buddharauer-frontend
