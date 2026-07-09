@@ -104,6 +104,17 @@ _DARK_THEME = gr.themes.Base(
 _DARK_CSS = """
 h1, .prose h1, .prose h2, .prose h3 { font-family: "Cinzel", Georgia, serif !important; color: #c9a227 !important; letter-spacing: 0.02em; }
 .prose, .prose p, .prose li { color: #e8e0d5 !important; }
+a.wiki-link { color: #d63a54 !important; font-family: "Cinzel", serif; letter-spacing: 0.02em; text-transform: uppercase; font-size: 0.85rem; }
+a.wiki-link:hover { color: #c9a227 !important; }
+/* gr.Dataframe ignores the theme's dark palette and defaults to a white
+   table regardless - force it to match everything else. */
+.table-wrap, .table-wrap table, .table-wrap td, .table-wrap th {
+    background: #1c1719 !important;
+    color: #e8e0d5 !important;
+    border-color: #2f2529 !important;
+}
+.table-wrap th { color: #c9a227 !important; background: #241c1f !important; }
+.table-wrap tr:nth-child(even) td { background: #241c1f !important; }
 """
 
 
@@ -290,7 +301,7 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
         sources_state = gr.State([])
 
         gr.Markdown("# Buddharauer - Malifaux Document Explorer")
-        gr.HTML(f'<a href="{api_base_url}/wiki" target="_blank">Browse the Wiki</a>')
+        gr.HTML(f'<a class="wiki-link" href="{api_base_url}/wiki" target="_blank">Browse the Wiki</a>')
 
         with gr.Row():
             with gr.Column(scale=1):
