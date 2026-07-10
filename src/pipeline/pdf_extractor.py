@@ -41,11 +41,49 @@ def _detect_section(text: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
+# A page counts as "image-heavy" (comic panel, illustration-dominated, etc.)
+# only if its embedded images cover a large fraction of the page AND it has
+# little real extracted text - a prose page with a large decorative
+# illustration alongside a full column of text still has real, citable
+# content and shouldn't be treated any differently. These are reasoned
+# starting defaults, not tuned against real comic-style PDFs (none exist in
+# this repo to calibrate against) - verified against synthetic pages only.
+IMAGE_COVERAGE_THRESHOLD = 0.4
+MAX_TEXT_CHARS_FOR_IMAGE_HEAVY = 200
+
+
+def _analyze_image_coverage(page: fitz.Page, text: str) -> bool:
+    """Deterministic, non-LLM heuristic: does this page's embedded-image
+    coverage and text sparsity suggest most of its content is visual rather
+    than textual?"""
+    page_area = page.rect.width * page.rect.height
+    if page_area <= 0:
+        return False
+
+    covered_area = 0.0
+    for image_info in page.get_image_info():
+        bbox = image_info.get("bbox")
+        if not bbox:
+            continue
+        x0, y0, x1, y1 = bbox
+        covered_area += max(0.0, x1 - x0) * max(0.0, y1 - y0)
+
+    coverage_ratio = min(1.0, covered_area / page_area)
+    return coverage_ratio >= IMAGE_COVERAGE_THRESHOLD and len(text.strip()) <= MAX_TEXT_CHARS_FOR_IMAGE_HEAVY
+
+
 @dataclass
 class ExtractedPage:
     page_number: int  # 1-indexed
     text: str
     section: str | None = None  # best-effort story/chapter title, if detected
+    is_image_heavy: bool = False  # little extracted text, large embedded-image coverage
+    # "text" (get_text() output, however sparse) or "visual" (a vision model
+    # actually replaced this page's text with a description - see
+    # image_extractor.py). is_image_heavy only means "flagged as a candidate
+    # for vision description" - source_type reflects what the text actually
+    # is, which stays "text" if vision description was never run or failed.
+    source_type: str = "text"
 
 
 @dataclass
@@ -90,7 +128,12 @@ def extract_pdf(path: str | Path) -> ExtractedDocument:
                 raise PDFExtractionError(
                     f"Failed to extract text from page {i} of '{pdf_path}': {e}"
                 ) from e
-            pages.append(ExtractedPage(page_number=i, text=text, section=_detect_section(text)))
+            is_image_heavy = _analyze_image_coverage(page, text)
+            pages.append(
+                ExtractedPage(
+                    page_number=i, text=text, section=_detect_section(text), is_image_heavy=is_image_heavy
+                )
+            )
     finally:
         doc.close()
 
