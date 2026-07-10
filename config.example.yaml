@@ -15,6 +15,12 @@ ollama:
   # How long Ollama keeps the model loaded in memory between requests, so
   # back-to-back questions don't pay the multi-second reload cost each time.
   keep_alive: "30m"
+  # Optional: a vision-capable model (e.g. "llava:latest") used ONLY for
+  # pages the pipeline's own heuristic flags as image-heavy (comic panels,
+  # heavily-illustrated pages) - never the default for anything else. Leave
+  # unset to disable the feature entirely; image-heavy pages just keep
+  # whatever sparse text get_text() found.
+  # vision_model: "llava:latest"
 
 chunking:
   chunk_size: 800

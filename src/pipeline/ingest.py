@@ -10,6 +10,7 @@ from src.pipeline.chunker import chunk_document
 from src.pipeline.embeddings import EmbeddingError, embed_chunks
 from src.pipeline.entity_deduper import find_duplicate_groups
 from src.pipeline.entity_extractor import extract_entities_for_document
+from src.pipeline.image_extractor import describe_image_heavy_pages
 from src.pipeline.pdf_extractor import ExtractedDocument, PDFExtractionError, extract_pdf
 from src.utils.logging import get_logger
 from src.utils.ollama_client import OllamaClient, OllamaError
@@ -81,6 +82,7 @@ def ingest_pdf(
     processed_dir: str,
     entity_store: EntityStore | None = None,
     chat_model: str | None = None,
+    vision_model: str | None = None,
 ) -> bool:
     """Run the full ingestion pipeline for a single PDF. Returns True on success."""
     document_id = pdf_path.stem
@@ -92,6 +94,15 @@ def ingest_pdf(
         logger.error("Extraction failed for %s: %s", pdf_path, e)
         registry.mark_failed(document_id, pdf_path.stem, str(pdf_path), str(e))
         return False
+
+    if vision_model is not None:
+        try:
+            document = describe_image_heavy_pages(str(pdf_path), document, ollama_client, vision_model)
+        except OllamaError as e:
+            # Vision description is an enhancement, not core to ingestion
+            # succeeding - image-heavy pages just keep their (likely sparse)
+            # extracted text if this fails.
+            logger.error("Vision description failed for %s: %s", pdf_path, e)
 
     chunks = chunk_document(document, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 

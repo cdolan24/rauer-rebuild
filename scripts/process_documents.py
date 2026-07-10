@@ -56,6 +56,7 @@ def main() -> int:
             config.paths.processed_dir,
             entity_store=entity_store,
             chat_model=config.ollama.chat_model,
+            vision_model=config.ollama.vision_model,
         )
         succeeded += int(ok)
         failed += int(not ok)
