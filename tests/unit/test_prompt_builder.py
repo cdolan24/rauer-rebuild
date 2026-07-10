@@ -5,9 +5,17 @@ from src.rag.conversation_store import ConversationTurn
 from src.rag.prompt_builder import build_messages
 
 
-def _chunk(doc_id="doc1", page_start=1, page_end=1, text="Aragorn is a ranger.") -> SearchResult:
+def _chunk(
+    doc_id="doc1", page_start=1, page_end=1, text="Aragorn is a ranger.", source_type="text"
+) -> SearchResult:
     return SearchResult(
-        chunk_id="c0", document_id=doc_id, text=text, page_start=page_start, page_end=page_end, score=0.9
+        chunk_id="c0",
+        document_id=doc_id,
+        text=text,
+        page_start=page_start,
+        page_end=page_end,
+        score=0.9,
+        source_type=source_type,
     )
 
 
@@ -44,3 +52,16 @@ def test_build_messages_formats_page_range():
     )
 
     assert "pp. 3-5" in messages[-1]["content"]
+
+
+def test_build_messages_labels_text_chunks_as_source():
+    messages = build_messages("Q", [_chunk(source_type="text")], history=[])
+
+    assert "[Source: doc1, p. 1]" in messages[-1]["content"]
+
+
+def test_build_messages_labels_visual_chunks_distinctly():
+    messages = build_messages("Q", [_chunk(source_type="visual", text="A knight in armor.")], history=[])
+
+    assert "[visually described: doc1, p. 1]" in messages[-1]["content"]
+    assert "A knight in armor." in messages[-1]["content"]

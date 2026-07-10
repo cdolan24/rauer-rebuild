@@ -18,6 +18,7 @@ class Citation:
     page_end: int
     chunk_id: str
     score: float
+    source_type: str = "text"  # "text" (directly extracted) or "visual" (vision-model description)
 
 
 @dataclass
@@ -81,6 +82,7 @@ class ChatEngine:
                 page_end=r.page_end,
                 chunk_id=r.chunk_id,
                 score=r.score,
+                source_type=r.source_type,
             )
             for r in relevant
         ]
@@ -118,6 +120,7 @@ class ChatEngine:
                 page_end=r.page_end,
                 chunk_id=r.chunk_id,
                 score=r.score,
+                source_type=r.source_type,
             )
             for r in relevant
         ]

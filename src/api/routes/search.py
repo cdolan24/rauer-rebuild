@@ -25,6 +25,7 @@ def search(payload: SearchRequest, request: Request) -> SearchResponse:
                 page_start=r.page_start,
                 page_end=r.page_end,
                 score=r.score,
+                source_type=r.source_type,
             )
             for r in results
         ]

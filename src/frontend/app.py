@@ -128,7 +128,8 @@ def _format_citation_label(source: dict) -> str:
         pages = f"p. {source['page_start']}"
     else:
         pages = f"pp. {source['page_start']}-{source['page_end']}"
-    return f"{name} ({pages})"
+    suffix = " [visually described]" if source.get("source_type") == "visual" else ""
+    return f"{name} ({pages}){suffix}"
 
 
 def _pdf_viewer_html(api_base_url: str, document_id: str, page: int) -> str:

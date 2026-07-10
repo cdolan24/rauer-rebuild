@@ -14,6 +14,7 @@ class SourceModel(BaseModel):
     page_start: int
     page_end: int
     score: float
+    source_type: str = "text"
 
 
 class ChatResponseModel(BaseModel):
@@ -67,6 +68,7 @@ class SearchResultModel(BaseModel):
     page_start: int
     page_end: int
     score: float
+    source_type: str = "text"
 
 
 class SearchResponse(BaseModel):
