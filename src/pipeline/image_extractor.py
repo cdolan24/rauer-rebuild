@@ -12,7 +12,13 @@ from src.utils.ollama_client import OllamaClient, OllamaError
 
 logger = get_logger(__name__)
 
-MAX_WORKERS = 4  # vision calls are heavier per-request than text/embedding calls
+# Vision calls are the heaviest/slowest of any LLM call in this pipeline
+# (90s+ each observed on CPU-only hardware), so queueing risk from Ollama's
+# default one-request-at-a-time inference is highest here - see
+# entity_extractor.py's MAX_WORKERS comment. Kept low, not sequential, so a
+# document with many flagged pages still gets some overlap if Ollama's
+# config ever does support concurrent inference.
+MAX_WORKERS = 2
 
 _VISION_SYSTEM_PROMPT = (
     "You are describing a page from a comic-style or heavily-illustrated document "

@@ -13,7 +13,14 @@ from src.utils.ollama_client import OllamaClient, OllamaError
 logger = get_logger(__name__)
 
 BATCH_SIZE = 45  # chunks per LLM call - mechanism proven on M1E, widening to cut call count further
-MAX_WORKERS = 8  # concurrent LLM calls - same pattern as pipeline/embeddings.py
+# Chat-model calls (unlike embeddings) are slow enough, and Ollama's default
+# config only actually runs one model inference at a time regardless of how
+# many requests are in flight, that a wide worker count just queues requests
+# up behind each other - and each queued request's client-side timeout clock
+# is already running while it waits its turn. On a real 629-page document (54
+# batches), 8-way concurrency caused every single batch to time out. Keeping
+# this low bounds the worst-case queueing depth a request can be stuck behind.
+MAX_WORKERS = 3
 
 # Single source of truth for the curated taxonomy - also imported by the
 # one-off reclassification script so both stay in sync.

@@ -18,7 +18,10 @@ from src.wiki.summary import generate_entity_summary
 
 logger = get_logger(__name__)
 
-_SUMMARY_MAX_WORKERS = 8
+# See entity_extractor.py's MAX_WORKERS comment: wide concurrency just queues
+# chat-model calls behind each other once Ollama is serializing inference
+# anyway, and each queued request's timeout clock runs the whole time it waits.
+_SUMMARY_MAX_WORKERS = 3
 
 
 def write_processed_text(document: ExtractedDocument, processed_dir: str) -> None:
