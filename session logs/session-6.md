@@ -65,16 +65,17 @@ Cleaned M1E one final time and ran the fixed pipeline detached. Took 171.8 minut
 
 ## State at end of session
 
-- `session-6` branch off `main`, holding the image-page-detection feature plus the concurrency fix; not yet merged to `main`.
+- `session-6` branch off `main`, holding the image-page-detection feature plus the concurrency fix - **explicitly not merged to `main` this session**, per the user's request.
 - 10 capability specs (all synced, including the new `image-page-processing`), no active OpenSpec changes.
 - `chat-frontend-dark` and `design-dark` worktrees removed (fully merged, redundant); `design-classic`/`design-modern` kept as reference.
 - The real M1E document has been reprocessed with the new pipeline: 2411 chunks, only 6 entities (down from 97 - a real regression from the incomplete entity extraction, see open items), 11 vision-described chunks. M2E has not been reprocessed.
-- Backend and frontend restarted and live-verified on the final code.
+- Local `config.yaml`'s `ollama.vision_model` set back to disabled (`null`) - was only turned on for this session's testing. Backend/frontend restarted on the disabled-vision config and re-verified healthy.
 
 ## Open items carried forward
 
-- Merge `session-6` into `main` when the user is ready.
-- **M1E's entity count regressed (97 -> 6)** because 9 of 54 entity-extraction batches still timed out even with reduced concurrency - the reduced-concurrency fix made entity extraction *reliable enough to complete*, not perfectly *complete*. Worth a follow-up: either a longer timeout still, a smaller `BATCH_SIZE` (more batches, each faster and less likely to queue past its own timeout), or accepting the loss and re-running entity extraction alone (`scripts/extract_entities.py`) against the already-ingested chunks to backfill what's missing.
+- **Explicitly NOT merged to `main` this session** - the user asked to hold off, given the mixed results of the image-processing round below. Revisit next session.
+- **Note for session 7 - prefer the text pipeline over the image/vision pipeline going forward.** The user's explicit preference after seeing the real cost: the text-extraction path is efficient and reliable; the vision path is neither, on this hardware. Reprocessing one 629-page document with vision enabled took **171.8 minutes** and *still* degraded entity-extraction reliability (see below) - the image-detection feature works and is verified end-to-end (worth keeping in the codebase, it's a real capability), but `ollama.vision_model` has been set back to disabled (`null`) in the local `config.yaml`, and should stay off by default rather than being routinely enabled. Only turn it on deliberately for a specific document/page that actually needs it, not as a standing default.
+- **M1E's entity count regressed (97 -> 6)** because 9 of 54 entity-extraction batches still timed out even with reduced concurrency - the reduced-concurrency fix made entity extraction *reliable enough to complete*, not perfectly *complete*. Worth a follow-up: either a longer timeout still, a smaller `BATCH_SIZE` (more batches, each faster and less likely to queue past its own timeout), or accepting the loss and re-running entity extraction alone (`scripts/extract_entities.py`) against the already-ingested chunks to backfill what's missing. Independent of the vision-model question - this affects plain entity extraction too and is worth fixing regardless of whether vision stays off.
 - M2E has not been reprocessed with the new image-detection/vision pipeline - it also has real cover art and 10 flagged pages per earlier analysis, but a repeat of the ~3-hour process wasn't done again this session given time already spent.
 - Real comic-style PDF content to calibrate the detection thresholds (0.4 coverage / 200 chars) against still doesn't exist in this repo - verified on synthetic pages and now real M1E pages (both worked as expected).
 - `qwen2.5vl` (session 5's top vision-model recommendation) was never pulled or tried - `llava:latest` was used to avoid an unplanned multi-GB download; swapping is a one-line config change (`ollama.vision_model`) whenever it's worth pulling.
