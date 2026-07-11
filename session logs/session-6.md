@@ -35,18 +35,49 @@ A full test-suite run unexpectedly took **22 minutes** instead of the usual ~30 
 
 191/191 tests passing (up from 176 at the end of session 5 - added tests for the detection heuristic, config's `vision_model` field, `image_extractor.py`, chunker source-type hard-breaks, and prompt_builder's visual-context labeling).
 
+## Round 2: repo cleanup, a real production reprocess, and a genuine concurrency bug
+
+Asked to remove worktree bloat, clean up before testing, and reprocess a real document (M1E) with the new image-processing feature enabled - specifically checking that the cover page (which has real cover art) gets picked up.
+
+### Cleanup
+
+Removed the `chat-frontend-dark` and `design-dark` worktrees - both fully merged into `main` already (verified via `git merge-base --is-ancestor`), so keeping them was pure duplication. Left `design-classic`/`design-modern` as-is (still intentionally kept as reference per the user's earlier decision). Also found and fixed a stale *local* `main` branch ref (still pointing at session 3's end commit, since all merges this project has done went through `git push origin <branch>:main` directly against the remote ref, never touching a local `main` branch) - caused a brief false alarm that design-dark/chat-frontend-dark weren't really merged, resolved by checking `origin/main` directly and then fast-forwarding the local ref to match.
+
+### A real, systemic concurrency bug - not just a vision-call problem
+
+Enabled `ollama.vision_model: "llava:latest"` in the real config and reprocessed the real M1E PDF (629 pages, 8 image-heavy pages including the cover) through the actual production pipeline. First attempt: **all 54 entity-extraction batches and half the vision-description calls timed out.** Root cause: Ollama only runs one model inference at a time by default, so 8-way (or 4-way, for vision) "concurrent" requests just queue up inside Ollama while each one's client-side timeout clock is already running - a request queued behind several others can exceed even a generous timeout before Ollama has even started working on it. This wasn't a bug introduced this session; it's a pre-existing characteristic of `entity_extractor.py`, `entity_deduper.py`, and the ingestion wiki-prep step that had just never been exercised at real full-document scale before. Fixed by reducing worker counts (8→3 for text-based LLM calls, 4→2 for vision) and raising the timeout, with the reasoning documented in code comments.
+
+### A process-check false negative caused real concurrent data corruption
+
+While re-running with the fix, a PowerShell process-list query reported the *first* (broken) attempt had already finished when it had actually been running for 3 hours in the background with the old code still loaded in memory (code edits don't affect an already-running process). Both attempts ended up writing to the same live SQLite/ChromaDB data simultaneously for a stretch, corrupting M1E's chunk/entity state (a document stuck in "pending" status, entity counts that didn't match either run's own accounting). Recovered by killing both processes, doing a complete manual wipe of M1E's chunks/entities/registry entry, and being far more careful about confirming a process has truly exited before starting another one against the same data.
+
+### The Bash tool's 10-minute background-task cap ate the next attempt too
+
+The next careful, solo re-run got silently killed partway through - not a code bug, but a tooling mistake: `run_in_background` has a hard 10-minute cap, and a full 629-page reprocess needs much longer. Switched to launching via `nohup ... & disown` (the same detached-process pattern already used all session for the backend/frontend), which isn't subject to that cap, and monitored it via periodic direct log checks instead of a blocking wait.
+
+### The clean run: real success, including the cover
+
+Cleaned M1E one final time and ran the fixed pipeline detached. Took 171.8 minutes end to end (real per-batch latency on this CPU-only hardware is genuinely slow - not every batch succeeded even at reduced concurrency, 9 of 54 entity-extraction batches still timed out, but the pipeline's existing "enhancement, not core to success" design meant it completed anyway with a smaller-than-ideal entity set, 6 entities instead of the prior 97). Final result: **2411 chunks, 11 marked `source_type: "visual"`, across 7 of the 8 originally-flagged pages - including page 1, the cover.** Verified live against the real running app (not just the ingestion script): `/api/search` for the cover's actual content ("woman hanging from gallows... comic book art... dark tones") returns it as the top result with `source_type: "visual"`; a real chat query about the cover correctly cites `chunk_0000` (page 1) tagged `source_type: "visual"`. One honest caveat: the model's answer that time stated the vision-derived (partially garbled) cover text under "**From the documents:**" instead of hedging it in "Interpretation:" as the system prompt instructs - the tagging and architecture are unambiguously correct every time (confirmed via citations and search results), but the model doesn't perfectly follow the hedging instruction on every single query, consistent with known small-model instruction-following limits rather than a pipeline defect.
+
+## Verification (round 2)
+
+191/191 tests still passing after the concurrency fix. Live-verified against the real production app: `/api/health` healthy, `/api/documents` shows M1E reprocessed (629 pages, 2411 chunks), `/api/search` and `/api/chat` both correctly surface the cover page's vision-described content with `source_type: "visual"` in citations.
+
 ## State at end of session
 
-- `session-6` branch off `main`, holding the image-page-detection feature; not yet merged to `main`.
+- `session-6` branch off `main`, holding the image-page-detection feature plus the concurrency fix; not yet merged to `main`.
 - 10 capability specs (all synced, including the new `image-page-processing`), no active OpenSpec changes.
-- Backend/frontend processes cleaned up to just the current session's pair.
+- `chat-frontend-dark` and `design-dark` worktrees removed (fully merged, redundant); `design-classic`/`design-modern` kept as reference.
+- The real M1E document has been reprocessed with the new pipeline: 2411 chunks, only 6 entities (down from 97 - a real regression from the incomplete entity extraction, see open items), 11 vision-described chunks. M2E has not been reprocessed.
+- Backend and frontend restarted and live-verified on the final code.
 
 ## Open items carried forward
 
 - Merge `session-6` into `main` when the user is ready.
-- Real comic-style PDF content to calibrate the detection thresholds (0.4 coverage / 200 chars) against doesn't exist in this repo yet - verified on synthetic pages only.
+- **M1E's entity count regressed (97 -> 6)** because 9 of 54 entity-extraction batches still timed out even with reduced concurrency - the reduced-concurrency fix made entity extraction *reliable enough to complete*, not perfectly *complete*. Worth a follow-up: either a longer timeout still, a smaller `BATCH_SIZE` (more batches, each faster and less likely to queue past its own timeout), or accepting the loss and re-running entity extraction alone (`scripts/extract_entities.py`) against the already-ingested chunks to backfill what's missing.
+- M2E has not been reprocessed with the new image-detection/vision pipeline - it also has real cover art and 10 flagged pages per earlier analysis, but a repeat of the ~3-hour process wasn't done again this session given time already spent.
+- Real comic-style PDF content to calibrate the detection thresholds (0.4 coverage / 200 chars) against still doesn't exist in this repo - verified on synthetic pages and now real M1E pages (both worked as expected).
 - `qwen2.5vl` (session 5's top vision-model recommendation) was never pulled or tried - `llava:latest` was used to avoid an unplanned multi-GB download; swapping is a one-line config change (`ollama.vision_model`) whenever it's worth pulling.
 - No panel detection, reading-order sorting, or speech-bubble OCR - a single vision-model call per flagged page gives a coarse description, not verbatim dialogue transcription (consistent with session 5's research on what local models can actually do today).
-- Decide whether to re-ingest the live M1E/M2E data to pick up session 5's chunking-boundary and auto-dedup/summarize fixes (still pending from session 5 - neither document has image-heavy pages, so this session's feature doesn't add a new reason to re-ingest them).
 - Optionally hand-merge the one real, currently-unmerged duplicate found in session 5: "Governor-General's mansion" / "The Governor's Mansion" (both M1E, same place).
 - Off-host (S3) backup replication and a real AWS deploy attempt remain deferred (unchanged from session 5).
