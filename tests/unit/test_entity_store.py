@@ -108,3 +108,57 @@ def test_list_all_orders_by_type_then_name(tmp_path):
     all_entities = store.list_all()
 
     assert [e.name for e in all_entities] == ["Lady Justice", "Bree"]
+
+
+def test_add_and_get_relationship_from_either_side(tmp_path):
+    store = EntityStore(str(tmp_path / "entities.db"))
+    justice_id = store.add_entity("doc1", "Lady Justice", "character", "desc")
+    guild_id = store.add_entity("doc1", "The Guild", "faction", "desc")
+
+    store.add_relationship(justice_id, guild_id, "member of")
+
+    from_justice = store.get_relationships(justice_id)
+    assert len(from_justice) == 1
+    assert from_justice[0].entity_id == justice_id
+    assert from_justice[0].related_entity_id == guild_id
+    assert from_justice[0].description == "member of"
+
+    from_guild = store.get_relationships(guild_id)
+    assert len(from_guild) == 1
+    assert from_guild[0].entity_id == guild_id  # normalized to the queried side
+    assert from_guild[0].related_entity_id == justice_id
+
+
+def test_get_relationships_empty_for_entity_with_none(tmp_path):
+    store = EntityStore(str(tmp_path / "entities.db"))
+    entity_id = store.add_entity("doc1", "Lady Justice", "character", "desc")
+
+    assert store.get_relationships(entity_id) == []
+
+
+def test_list_all_relationships(tmp_path):
+    store = EntityStore(str(tmp_path / "entities.db"))
+    a = store.add_entity("doc1", "A", "character", "desc")
+    b = store.add_entity("doc1", "B", "character", "desc")
+    store.add_relationship(a, b, "rival of")
+
+    all_relationships = store.list_all_relationships()
+
+    assert len(all_relationships) == 1
+    assert all_relationships[0].description == "rival of"
+
+
+def test_merge_entities_reassigns_relationships_and_drops_self_loops(tmp_path):
+    store = EntityStore(str(tmp_path / "entities.db"))
+    keep_id = store.add_entity("doc1", "Molly Squidpiddge", "character", "desc")
+    dup_id = store.add_entity("doc1", "Molly-girl", "character", "")
+    guild_id = store.add_entity("doc1", "The Guild", "faction", "desc")
+    store.add_relationship(dup_id, guild_id, "member of")
+    store.add_relationship(keep_id, dup_id, "same person as")  # becomes a self-loop after merge
+
+    store.merge_entities(keep_id, [dup_id])
+
+    relationships = store.get_relationships(keep_id)
+    assert len(relationships) == 1
+    assert relationships[0].related_entity_id == guild_id
+    assert relationships[0].description == "member of"

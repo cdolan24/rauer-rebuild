@@ -147,6 +147,14 @@
         .infobox dt { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gold); margin-top: 0.8rem; font-family: "Cinzel", serif; }
         .infobox dd { margin: 0.25rem 0 0 0; }
         .infobox ul { list-style: none; padding: 0; margin: 0; }
+
+        /* Relationship graph - a plain circular node-link layout, computed
+           server-side, no client-side JS or graph library needed. */
+        .graph-svg { width: 100%; height: auto; max-height: 640px; }
+        .graph-edge { stroke: var(--border); stroke-width: 1; }
+        .graph-node { fill: var(--crimson); stroke: var(--gold); stroke-width: 1; }
+        .graph-node:hover { fill: var(--gold); }
+        .graph-label { fill: var(--ink); font-size: 11px; font-family: "EB Garamond", Georgia, serif; }
     </style>
 </head>
 <body>
@@ -157,6 +165,11 @@
     <div class="wiki-layout">
         <aside class="wiki-sidebar">
             <input type="text" id="wiki-search" placeholder="Search entities...">
+            <h3>Quick Links</h3>
+            <ul>
+                <li><a href="/wiki/locations">Locations Map</a></li>
+                <li><a href="/wiki/graph">Relationship Graph</a></li>
+            </ul>
             <h3>Categories</h3>
             <ul>
                 {% for cat, count in category_counts.items() %}

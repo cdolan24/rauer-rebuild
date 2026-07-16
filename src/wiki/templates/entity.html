@@ -11,7 +11,29 @@
 <div class="entity-page">
     <div class="entity-body">
         <h1>{{ entity.name }} <span class="badge">{{ entity.type }}</span></h1>
-        <p>{{ entity.summary or entity.description }}</p>
+        <div class="summary">
+            {% for paragraph in (entity.summary or entity.description).split('\n\n') %}
+            <p>{{ paragraph }}</p>
+            {% endfor %}
+        </div>
+        {% if entity.type == 'faction' %}
+        <h2>Members</h2>
+        <ul class="members">
+            {% for member in members %}
+            <li><a href="/wiki/entity/{{ member.id }}">{{ member.name }}</a></li>
+            {% else %}
+            <li>No recorded members.</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        <h2>Relationships</h2>
+        <ul class="relationships">
+            {% for related, description in relationships %}
+            <li><a href="/wiki/entity/{{ related.id }}">{{ related.name }}</a> - {{ description }}</li>
+            {% else %}
+            <li>No recorded relationships.</li>
+            {% endfor %}
+        </ul>
         <h2>Mentioned In</h2>
         <ul class="citations">
             {% for mention in mentions %}

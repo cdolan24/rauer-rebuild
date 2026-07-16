@@ -116,13 +116,16 @@ def test_ollama_request_timeout_can_be_overridden(tmp_path):
     assert config.ollama.request_timeout == 30.0
 
 
-def test_vision_model_defaults_to_none_when_absent(tmp_path):
+def test_vision_model_defaults_to_qwen_when_absent(tmp_path):
+    """Absent (not explicitly disabled) means vision kicks in automatically
+    whenever a page is flagged image-heavy - see image_extractor.py, which
+    is a no-op for documents with no flagged pages regardless."""
     config_path = tmp_path / "config.yaml"
     config_path.write_text(_BASE_CONFIG, encoding="utf-8")
 
     config = load_config(config_path)
 
-    assert config.ollama.vision_model is None
+    assert config.ollama.vision_model == "qwen2.5vl:7b"
 
 
 def test_vision_model_can_be_set(tmp_path):
@@ -135,6 +138,18 @@ def test_vision_model_can_be_set(tmp_path):
     config = load_config(config_path)
 
     assert config.ollama.vision_model == "llava:latest"
+
+
+def test_vision_model_can_be_explicitly_disabled(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG.replace(
+        'embedding_model: "nomic-embed-text:latest"',
+        'embedding_model: "nomic-embed-text:latest"\n  vision_model: null',
+    ), encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.ollama.vision_model is None
 
 
 def test_frontend_public_url_defaults_from_port_when_absent(tmp_path):

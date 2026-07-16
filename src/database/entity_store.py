@@ -23,6 +23,15 @@ CREATE TABLE IF NOT EXISTS entity_mentions (
     page_end INTEGER NOT NULL,
     FOREIGN KEY (entity_id) REFERENCES entities(id)
 );
+
+CREATE TABLE IF NOT EXISTS entity_relationships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_id INTEGER NOT NULL,
+    related_entity_id INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    FOREIGN KEY (entity_id) REFERENCES entities(id),
+    FOREIGN KEY (related_entity_id) REFERENCES entities(id)
+);
 """
 
 
@@ -43,6 +52,14 @@ class EntityMention:
     document_id: str
     page_start: int
     page_end: int
+
+
+@dataclass
+class Relationship:
+    id: int
+    entity_id: int
+    related_entity_id: int
+    description: str
 
 
 class EntityStore:
@@ -90,8 +107,8 @@ class EntityStore:
 
     def merge_entities(self, keep_id: int, merge_ids: list[int]) -> None:
         """Consolidate duplicate entities onto `keep_id`: reassign all of
-        their mentions, delete the duplicate rows, and clear `keep_id`'s
-        cached summary since its mention set just changed."""
+        their mentions and relationships, delete the duplicate rows, and
+        clear `keep_id`'s cached summary since its mention set just changed."""
         if not merge_ids:
             return
         with closing(self._connect()) as conn:
@@ -100,6 +117,19 @@ class EntityStore:
                 f"UPDATE entity_mentions SET entity_id = ? WHERE entity_id IN ({placeholders})",
                 (keep_id, *merge_ids),
             )
+            conn.execute(
+                f"UPDATE entity_relationships SET entity_id = ? WHERE entity_id IN ({placeholders})",
+                (keep_id, *merge_ids),
+            )
+            conn.execute(
+                f"UPDATE entity_relationships SET related_entity_id = ? "
+                f"WHERE related_entity_id IN ({placeholders})",
+                (keep_id, *merge_ids),
+            )
+            # A relationship between two entities that both got merged onto
+            # keep_id (or a merged entity and keep_id itself) is now a
+            # self-loop - meaningless, so drop it rather than keep it around.
+            conn.execute("DELETE FROM entity_relationships WHERE entity_id = related_entity_id")
             conn.execute(f"DELETE FROM entities WHERE id IN ({placeholders})", merge_ids)
             conn.execute("UPDATE entities SET summary = NULL WHERE id = ?", (keep_id,))
             conn.commit()
@@ -139,3 +169,40 @@ class EntityStore:
                 "SELECT * FROM entity_mentions WHERE entity_id = ? ORDER BY page_start", (entity_id,)
             ).fetchall()
         return [EntityMention(**dict(row)) for row in rows]
+
+    def add_relationship(self, entity_id: int, related_entity_id: int, description: str) -> int:
+        with closing(self._connect()) as conn:
+            cursor = conn.execute(
+                "INSERT INTO entity_relationships (entity_id, related_entity_id, description) "
+                "VALUES (?, ?, ?)",
+                (entity_id, related_entity_id, description),
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_relationships(self, entity_id: int) -> list[Relationship]:
+        """Relationships involving `entity_id`, on either side of the stored
+        row - each result's `entity_id` is normalized to the queried entity
+        so callers always read `related_entity_id` as "the other one"."""
+        with closing(self._connect()) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM entity_relationships WHERE entity_id = ? OR related_entity_id = ?",
+                (entity_id, entity_id),
+            ).fetchall()
+        relationships = []
+        for row in rows:
+            data = dict(row)
+            if data["entity_id"] != entity_id:
+                data["entity_id"], data["related_entity_id"] = (
+                    data["related_entity_id"],
+                    data["entity_id"],
+                )
+            relationships.append(Relationship(**data))
+        return relationships
+
+    def list_all_relationships(self) -> list[Relationship]:
+        with closing(self._connect()) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM entity_relationships").fetchall()
+        return [Relationship(**dict(row)) for row in rows]

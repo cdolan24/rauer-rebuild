@@ -12,7 +12,12 @@ from src.utils.ollama_client import OllamaClient, OllamaError
 
 logger = get_logger(__name__)
 
-BATCH_SIZE = 45  # chunks per LLM call - mechanism proven on M1E, widening to cut call count further
+BATCH_SIZE = 20  # chunks per LLM call - 45 caused 9/54 batches to time out even at
+# MAX_WORKERS=3 and a 300s timeout on the real M1E document, since a 45-chunk
+# batch is slow enough on its own (CPU-only inference) that queueing behind
+# even one other request could exceed the timeout before the model started.
+# A smaller batch is faster per-call, bounding worst-case queued wait time,
+# at the cost of more total batches/calls.
 # Chat-model calls (unlike embeddings) are slow enough, and Ollama's default
 # config only actually runs one model inference at a time regardless of how
 # many requests are in flight, that a wide worker count just queues requests
@@ -86,6 +91,12 @@ class ExtractedEntity:
     description: str
 
 
+@dataclass
+class ExtractionResult:
+    entity_count: int
+    uncovered_chunk_ids: list[str]
+
+
 def _batch_chunks(chunks: list[Chunk], batch_size: int = BATCH_SIZE) -> list[list[Chunk]]:
     return [chunks[i : i + batch_size] for i in range(0, len(chunks), batch_size)]
 
@@ -136,7 +147,7 @@ def extract_entities_for_document(
     chat_model: str,
     entity_store: EntityStore,
     max_workers: int = MAX_WORKERS,
-) -> int:
+) -> ExtractionResult:
     """Extract named entities from a document's chunks and index their mentions.
 
     Chunks are processed in batches (one LLM call per batch) rather than one call
@@ -145,10 +156,16 @@ def extract_entities_for_document(
     bottleneck). Mention indexing then scans every chunk in the document for
     each entity found, not just the batch it was first mentioned in.
 
-    Returns the number of distinct entities created.
+    A batch that fails is retried once before being given up on - a single
+    timeout under concurrent load doesn't mean the same batch would fail
+    again once its turn comes, and a batch that fails twice loses coverage
+    entirely (no entities from it, ever), so it's worth one retry.
+
+    Returns an ExtractionResult with the number of distinct entities created
+    and the chunk ids belonging to any batch that still failed after retry.
     """
     if not chunks:
-        return 0
+        return ExtractionResult(entity_count=0, uncovered_chunk_ids=[])
 
     batches = _batch_chunks(chunks)
 
@@ -156,20 +173,30 @@ def extract_entities_for_document(
         i, batch = indexed_batch
         batch_text = "\n\n".join(c.text for c in batch)
         messages = _build_messages(batch_text)
-        try:
-            return ollama_client.chat(chat_model, messages, temperature=0.2)
-        except OllamaError as e:
-            # One slow/failed batch shouldn't lose every entity found in the
-            # other batches (and, critically, shouldn't skip mention indexing
-            # for them - that still runs below over whatever was found).
-            logger.warning(
-                "Entity extraction batch %d/%d failed for %s, skipping: %s",
-                i + 1, len(batches), document_id, e,
-            )
-            return None
+        last_error: OllamaError | None = None
+        for _ in range(2):
+            try:
+                return ollama_client.chat(chat_model, messages, temperature=0.2)
+            except OllamaError as e:
+                last_error = e
+        # One slow/failed batch shouldn't lose every entity found in the
+        # other batches (and, critically, shouldn't skip mention indexing
+        # for them - that still runs below over whatever was found).
+        logger.warning(
+            "Entity extraction batch %d/%d failed for %s after retry, skipping: %s",
+            i + 1, len(batches), document_id, last_error,
+        )
+        return None
 
     with ThreadPoolExecutor(max_workers=min(max_workers, len(batches))) as executor:
         responses = list(executor.map(_call_batch, enumerate(batches)))
+
+    uncovered_chunk_ids = [
+        chunk.chunk_id
+        for response, batch in zip(responses, batches)
+        if response is None
+        for chunk in batch
+    ]
 
     # Entity creation happens single-threaded after all responses are in, so
     # there's no concurrent-write contention on entity_store or the dedupe dict.
@@ -200,8 +227,11 @@ def extract_entities_for_document(
         ]
         entity_store.add_mentions(mentions)
 
-    logger.info("Extracted %d entities for %s", len(seen_names), document_id)
-    return len(seen_names)
+    logger.info(
+        "Extracted %d entities for %s (%d/%d chunks uncovered)",
+        len(seen_names), document_id, len(uncovered_chunk_ids), len(chunks),
+    )
+    return ExtractionResult(entity_count=len(seen_names), uncovered_chunk_ids=uncovered_chunk_ids)
 
 
 def _build_reclassify_messages(entity: Entity) -> list[dict[str, str]]:

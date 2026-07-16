@@ -47,10 +47,13 @@ def main() -> int:
         if not chunks:
             logger.warning("No chunks found for %s, skipping.", document_id)
             continue
-        count = extract_entities_for_document(
+        result = extract_entities_for_document(
             chunks, document_id, ollama_client, config.ollama.chat_model, entity_store
         )
-        logger.info("Extracted %d entities for %s (%d chunks)", count, document_id, len(chunks))
+        logger.info(
+            "Extracted %d entities for %s (%d chunks, %d uncovered)",
+            result.entity_count, document_id, len(chunks), len(result.uncovered_chunk_ids),
+        )
 
     return 0
 

@@ -63,7 +63,7 @@ def test_ingest_pdf_succeeds_even_if_wiki_prep_fails(tmp_path, fake_ollama_clien
     vector_store = VectorStore(str(tmp_path / "vector_db"), "test")
     entity_store = EntityStore(str(tmp_path / "entities.db"))
 
-    def _raise(entity_store, ollama_client, chat_model):
+    def _raise(entity_store, vector_store, ollama_client, chat_model):
         raise OllamaError("simulated dedup/summary failure")
 
     monkeypatch.setattr(ingest, "_prepare_wiki_data", _raise)

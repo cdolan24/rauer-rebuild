@@ -15,11 +15,12 @@ class OllamaConfig:
     request_timeout: float
     num_predict: int | None
     keep_alive: str | None
-    # Optional: a vision-capable model (e.g. "llava:latest") used ONLY for
-    # pages the pipeline's own heuristic flags as image-heavy - never the
-    # default for anything. Unset (None) disables the feature entirely;
-    # image-heavy pages just keep whatever sparse text get_text() found.
-    vision_model: str | None = None
+    # A vision-capable model (e.g. "qwen2.5vl:7b") used ONLY for pages the
+    # pipeline's own heuristic flags as image-heavy - never the default for
+    # anything else, and a no-op (no LLM call, no cost) for documents with
+    # no flagged pages. Set to None/null to disable the feature entirely;
+    # image-heavy pages then just keep whatever sparse text get_text() found.
+    vision_model: str | None = "qwen2.5vl:7b"
 
 
 @dataclass
@@ -112,7 +113,12 @@ def load_config(path: str | Path = "config.yaml") -> Config:
             request_timeout=float(ollama.get("request_timeout", 180.0)),
             num_predict=int(ollama["num_predict"]) if ollama.get("num_predict") is not None else None,
             keep_alive=ollama.get("keep_alive"),
-            vision_model=ollama.get("vision_model"),
+            # Defaults to a real model (not None) so vision kicks in
+            # automatically whenever a page is actually flagged image-heavy -
+            # see pipeline/image_extractor.py, which only ever calls this for
+            # flagged pages and is a costless no-op for text-only documents.
+            # Set explicitly to null/none in config.yaml to disable entirely.
+            vision_model=ollama.get("vision_model", "qwen2.5vl:7b"),
         ),
         chunking=ChunkingConfig(
             chunk_size=int(chunking["chunk_size"]),

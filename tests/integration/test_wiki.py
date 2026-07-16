@@ -80,6 +80,63 @@ def test_wiki_category_empty(api_client):
     assert "No entities found for this category." in response.text
 
 
+def test_wiki_locations_page_lists_only_locations(api_client):
+    store = api_client.app.state.entity_store
+    bree_id = store.add_entity("doc1", "Bree", "location", "A frontier town.")
+    store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+
+    response = api_client.get("/wiki/locations")
+
+    assert response.status_code == 200
+    assert "Bree" in response.text
+    assert "Lady Justice" not in response.text
+    assert f'href="/wiki/entity/{bree_id}"' in response.text
+
+
+def test_wiki_locations_page_empty(api_client):
+    response = api_client.get("/wiki/locations")
+
+    assert response.status_code == 200
+    assert "No locations found." in response.text
+
+
+def test_wiki_sidebar_links_to_locations_page(api_client):
+    response = api_client.get("/wiki")
+
+    assert response.status_code == 200
+    assert 'href="/wiki/locations"' in response.text
+
+
+def test_wiki_graph_page_shows_related_entities(api_client):
+    store = api_client.app.state.entity_store
+    justice_id = store.add_entity("doc1", "Lady Justice", "character", "desc")
+    guild_id = store.add_entity("doc1", "The Guild", "faction", "desc")
+    store.add_entity("doc1", "Unrelated Entity", "character", "desc")  # no relationships
+    store.add_relationship(justice_id, guild_id, "member of")
+
+    response = api_client.get("/wiki/graph")
+
+    assert response.status_code == 200
+    assert "Lady Justice" in response.text
+    assert "The Guild" in response.text
+    assert "Unrelated Entity" not in response.text  # not part of any relationship
+    assert f'href="/wiki/entity/{justice_id}"' in response.text
+
+
+def test_wiki_graph_page_empty_state(api_client):
+    response = api_client.get("/wiki/graph")
+
+    assert response.status_code == 200
+    assert "No relationships have been extracted yet." in response.text
+
+
+def test_wiki_sidebar_links_to_graph_page(api_client):
+    response = api_client.get("/wiki")
+
+    assert response.status_code == 200
+    assert 'href="/wiki/graph"' in response.text
+
+
 def test_wiki_entity_page_generates_and_caches_summary(api_client):
     store = api_client.app.state.entity_store
     entity_id = store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
@@ -103,6 +160,69 @@ def test_wiki_entity_page_generates_and_caches_summary(api_client):
 def test_wiki_entity_not_found(api_client):
     response = api_client.get("/wiki/entity/999999")
     assert response.status_code == 404
+
+
+def test_wiki_entity_page_lists_relationships(api_client):
+    store = api_client.app.state.entity_store
+    justice_id = store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+    guild_id = store.add_entity("doc1", "The Guild", "faction", "A shadowy organization.")
+    store.add_relationship(justice_id, guild_id, "member of")
+
+    response = api_client.get(f"/wiki/entity/{justice_id}")
+
+    assert response.status_code == 200
+    assert "The Guild" in response.text
+    assert "member of" in response.text
+    assert f'href="/wiki/entity/{guild_id}"' in response.text
+
+
+def test_wiki_entity_page_no_relationships_renders_empty_state(api_client):
+    store = api_client.app.state.entity_store
+    entity_id = store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+
+    response = api_client.get(f"/wiki/entity/{entity_id}")
+
+    assert response.status_code == 200
+    assert "No recorded relationships." in response.text
+
+
+def test_wiki_faction_page_lists_members(api_client):
+    store = api_client.app.state.entity_store
+    guild_id = store.add_entity("doc1", "The Guild", "faction", "A shadowy organization.")
+    justice_id = store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+    rival_id = store.add_entity("doc1", "Rasputina", "character", "An ice witch.")
+    store.add_relationship(guild_id, justice_id, "member of")
+    store.add_relationship(guild_id, rival_id, "rival of")
+
+    response = api_client.get(f"/wiki/entity/{guild_id}")
+
+    assert response.status_code == 200
+    assert "Lady Justice" in response.text
+    # Rasputina is related (a rival), but not a member - shouldn't be listed
+    # under Members even though she appears under the general Relationships list.
+    members_section = response.text.split("<h2>Members</h2>")[1].split("<h2>Relationships</h2>")[0]
+    assert "Lady Justice" in members_section
+    assert "Rasputina" not in members_section
+
+
+def test_wiki_faction_page_no_members_renders_empty_state(api_client):
+    store = api_client.app.state.entity_store
+    guild_id = store.add_entity("doc1", "The Guild", "faction", "A shadowy organization.")
+
+    response = api_client.get(f"/wiki/entity/{guild_id}")
+
+    assert response.status_code == 200
+    assert "No recorded members." in response.text
+
+
+def test_wiki_non_faction_entity_page_has_no_members_section(api_client):
+    store = api_client.app.state.entity_store
+    entity_id = store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+
+    response = api_client.get(f"/wiki/entity/{entity_id}")
+
+    assert response.status_code == 200
+    assert "<h2>Members</h2>" not in response.text
 
 
 def test_wiki_entity_page_falls_back_to_description_when_summary_generation_fails(

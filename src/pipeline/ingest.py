@@ -8,10 +8,11 @@ from src.database.entity_store import EntityStore
 from src.database.vector_store import VectorStore
 from src.pipeline.chunker import chunk_document
 from src.pipeline.embeddings import EmbeddingError, embed_chunks
-from src.pipeline.entity_deduper import find_duplicate_groups
 from src.pipeline.entity_extractor import extract_entities_for_document
 from src.pipeline.image_extractor import describe_image_heavy_pages
+from src.pipeline.mention_context import gather_mention_context
 from src.pipeline.pdf_extractor import ExtractedDocument, PDFExtractionError, extract_pdf
+from src.pipeline.relationship_extractor import extract_relationships_for_document
 from src.utils.logging import get_logger
 from src.utils.ollama_client import OllamaClient, OllamaError
 from src.wiki.summary import generate_entity_summary
@@ -35,33 +36,33 @@ def write_processed_text(document: ExtractedDocument, processed_dir: str) -> Non
 
 
 def _prepare_wiki_data(
-    entity_store: EntityStore, ollama_client: OllamaClient, chat_model: str
+    entity_store: EntityStore, vector_store: VectorStore, ollama_client: OllamaClient, chat_model: str
 ) -> None:
-    """Merge duplicate entities and generate a wiki summary for every entity
-    that doesn't have one yet, so the wiki is fully legible immediately after
-    ingestion - no separate manual dedup/summary pass needed.
+    """Generate a wiki summary and relationships for every entity that
+    doesn't have them yet, so the wiki is fully legible immediately after
+    ingestion - no separate manual summary/relationship pass needed.
 
-    Deduplication runs against the *entire* entity store, not just the
-    document that was just ingested, since a real duplicate can span
-    documents (the same character named slightly differently in two
-    sourcebooks). Summaries are generated after merging, not before, so a
-    summary is never wasted on an entity that's about to be merged away
-    (merging already clears the surviving entity's cached summary, since its
-    mention set just changed)."""
-    groups = find_duplicate_groups(entity_store.list_all(), ollama_client, chat_model)
-    for group in groups:
-        entity_store.merge_entities(group.keep_id, group.merge_ids)
-    if groups:
-        logger.info("Deduplication merged %d group(s) of entities", len(groups))
-
-    to_summarize = [e for e in entity_store.list_all() if not e.summary]
-    if not to_summarize:
-        return
+    Deliberately does NOT run automatic deduplication - a real run against
+    M1E's backfilled entities found the LLM-confirmation dedup step in
+    entity_deduper.py had a ~40% false-positive rate on short, single-sentence
+    descriptions (including one merge that looked like the safest in the
+    batch but actually conflated two distinct siblings), and it ran a second
+    time unreviewed during M2E's ingestion, merging 91 groups with no way to
+    audit or undo it afterward. Deduplication is now a deliberate, separate
+    step: run scripts/dedupe_entities.py --dry-run and review its output by
+    hand before applying anything. See session notes for the M1E/M2E
+    incidents; a more reliable automatic approach (e.g. grounding the
+    confirmation prompt in real mention text rather than a thin one-sentence
+    description) is worth revisiting later."""
+    all_entities = entity_store.list_all()
 
     def _summarize(entity) -> None:
         mentions = entity_store.get_mentions(entity.id)
+        mention_context = gather_mention_context(mentions, vector_store)
         try:
-            summary = generate_entity_summary(entity, len(mentions), ollama_client, chat_model)
+            summary = generate_entity_summary(
+                entity, len(mentions), mention_context, ollama_client, chat_model
+            )
         except OllamaError as e:
             logger.warning(
                 "Could not generate wiki summary for entity %d (%s): %s", entity.id, entity.name, e
@@ -69,9 +70,20 @@ def _prepare_wiki_data(
             return
         entity_store.set_summary(entity.id, summary)
 
-    with ThreadPoolExecutor(max_workers=min(_SUMMARY_MAX_WORKERS, len(to_summarize))) as executor:
-        list(executor.map(_summarize, to_summarize))
-    logger.info("Generated %d wiki summaries", len(to_summarize))
+    to_summarize = [e for e in all_entities if not e.summary]
+    if to_summarize:
+        with ThreadPoolExecutor(max_workers=min(_SUMMARY_MAX_WORKERS, len(to_summarize))) as executor:
+            list(executor.map(_summarize, to_summarize))
+        logger.info("Generated %d wiki summaries", len(to_summarize))
+
+    # Relationships, like summaries, are only generated once per entity - an
+    # entity that already has at least one recorded relationship is assumed
+    # done, so re-ingesting other documents doesn't keep re-querying it.
+    to_relate = [e for e in all_entities if not entity_store.get_relationships(e.id)]
+    if to_relate:
+        extract_relationships_for_document(
+            to_relate, entity_store, vector_store, ollama_client, chat_model
+        )
 
 
 def ingest_pdf(
@@ -135,7 +147,7 @@ def ingest_pdf(
             logger.error("Entity extraction failed for %s: %s", pdf_path, e)
 
         try:
-            _prepare_wiki_data(entity_store, ollama_client, chat_model)
+            _prepare_wiki_data(entity_store, vector_store, ollama_client, chat_model)
         except OllamaError as e:
             # Same reasoning - the wiki still has a lazy-generation fallback
             # for anything left unsummarized.

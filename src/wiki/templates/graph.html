@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Relationship Graph - Malifaux Wiki{% endblock %}
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="/wiki">Wiki Home</a> &gt; Relationship Graph</nav>
+{% endblock %}
+{% block content %}
+<h1>Relationship Graph</h1>
+{% if nodes %}
+<svg viewBox="0 0 600 600" class="graph-svg">
+    {% for edge in edges %}
+    <line x1="{{ edge.x1 }}" y1="{{ edge.y1 }}" x2="{{ edge.x2 }}" y2="{{ edge.y2 }}" class="graph-edge" />
+    {% endfor %}
+    {% for node in nodes %}
+    <a href="/wiki/entity/{{ node.id }}">
+        <circle cx="{{ node.x }}" cy="{{ node.y }}" r="8" class="graph-node" />
+        <text x="{{ node.x }}" y="{{ node.y - 12 }}" text-anchor="middle" class="graph-label">{{ node.name }}</text>
+    </a>
+    {% endfor %}
+</svg>
+{% else %}
+<p>No relationships have been extracted yet.</p>
+{% endif %}
+{% endblock %}

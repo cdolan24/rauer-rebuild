@@ -10,9 +10,11 @@ ollama:
   # also applies to ingestion's concurrent entity-extraction/dedup/vision
   # calls - Ollama's default config only runs one inference at a time, so a
   # request queued behind others is still burning its own timeout clock while
-  # it waits. 300s gives real documents enough headroom; a real 629-page
-  # document timed out on every batch at 180s.
-  request_timeout: 300
+  # it waits. 300s gave a real 629-page document (which timed out on every
+  # batch at 180s) enough headroom to mostly complete, but 9/54 batches still
+  # timed out even with reduced concurrency; combined with entity_extractor's
+  # smaller BATCH_SIZE, 450s gives real documents more margin.
+  request_timeout: 450
   # Caps how many tokens a single answer can generate - the single biggest
   # lever on perceived response speed for local models. 512 is enough for a
   # thorough lore answer without letting the model ramble for minutes.
@@ -20,12 +22,13 @@ ollama:
   # How long Ollama keeps the model loaded in memory between requests, so
   # back-to-back questions don't pay the multi-second reload cost each time.
   keep_alive: "30m"
-  # Optional: a vision-capable model (e.g. "llava:latest") used ONLY for
-  # pages the pipeline's own heuristic flags as image-heavy (comic panels,
-  # heavily-illustrated pages) - never the default for anything else. Leave
-  # unset to disable the feature entirely; image-heavy pages just keep
-  # whatever sparse text get_text() found.
-  # vision_model: "llava:latest"
+  # A vision-capable model used automatically whenever the pipeline's own
+  # heuristic flags a page as image-heavy (comic panels, heavily-illustrated
+  # pages) - never the default for anything else, and free (no LLM call) for
+  # documents with no flagged pages. Defaults to "qwen2.5vl:7b" if omitted;
+  # set to null/none to disable the feature entirely, in which case
+  # image-heavy pages just keep whatever sparse text get_text() found.
+  # vision_model: "qwen2.5vl:7b"
 
 chunking:
   chunk_size: 800

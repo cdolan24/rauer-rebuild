@@ -77,9 +77,10 @@ def test_extract_entities_creates_entities_and_mentions(tmp_path):
     client = ScriptedOllamaClient(response)
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    count = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
 
-    assert count == 2
+    assert result.entity_count == 2
+    assert result.uncovered_chunk_ids == []
     entities = {e.name: e for e in store.list_by_document("doc1")}
     assert set(entities) == {"Lady Justice", "Bree"}
 
@@ -99,9 +100,9 @@ def test_extract_entities_dedupes_across_batches(tmp_path):
     client = ScriptedOllamaClient(response)
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    count = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
 
-    assert count == 1
+    assert result.entity_count == 1
     assert client.calls > 1  # multiple batches, same entity each time
     entities = store.list_by_document("doc1")
     assert len(entities) == 1
@@ -110,7 +111,8 @@ def test_extract_entities_dedupes_across_batches(tmp_path):
 def test_extract_entities_survives_a_failed_batch(tmp_path):
     """A single batch timing out shouldn't lose entities/mentions from the
     other, successful batches (regression test for a real failure hit while
-    extracting entities from the full M1E document)."""
+    extracting entities from the full M1E document). With retry-once, a
+    single transient failure is also recovered rather than left uncovered."""
     chunks = [
         _chunk(f"c{i}", f"Lady Justice appears again in scene {i}.", i + 1)
         for i in range(_MULTI_BATCH_CHUNK_COUNT)
@@ -119,12 +121,57 @@ def test_extract_entities_survives_a_failed_batch(tmp_path):
     client = FlakyOllamaClient(response)
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    count = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
 
-    assert count == 1  # found in later batches despite the first one failing
+    assert result.entity_count == 1  # found in later batches despite the first one failing
+    assert result.uncovered_chunk_ids == []  # retried and recovered, nothing lost
     entity = store.list_by_document("doc1")[0]
     mentions = store.get_mentions(entity.id)
     assert len(mentions) == _MULTI_BATCH_CHUNK_COUNT  # mention indexing still ran over ALL chunks
+
+
+class PermanentlyFailingOllamaClient:
+    """Fails every call whose message content contains `fail_marker`, and
+    returns a fixed response otherwise - lets a test target one specific
+    batch for permanent failure regardless of concurrent dispatch order."""
+
+    def __init__(self, response: str, fail_marker: str) -> None:
+        self.response = response
+        self.fail_marker = fail_marker
+
+    def chat(self, model, messages, temperature=0.7):
+        if self.fail_marker in messages[-1]["content"]:
+            raise OllamaError("simulated permanent failure")
+        return self.response
+
+    def embed(self, model, text):
+        raise NotImplementedError
+
+    def is_healthy(self):
+        return True, ["fake"]
+
+
+def test_extract_entities_reports_uncovered_chunks_after_permanent_batch_failure(tmp_path):
+    """A batch that fails on both its original attempt and its retry loses
+    coverage entirely - the chunks it covered should be reported, not
+    silently dropped."""
+    good_chunks = [
+        _chunk(f"c{i}", f"Lady Justice appears again in scene {i}.", i + 1)
+        for i in range(entity_extractor.BATCH_SIZE)
+    ]
+    bad_chunks = [
+        _chunk(f"bad{i}", f"UNRECOVERABLE marker text {i}.", 100 + i)
+        for i in range(entity_extractor.BATCH_SIZE)
+    ]
+    chunks = good_chunks + bad_chunks
+    response = '[{"name": "Lady Justice", "type": "character", "description": "desc"}]'
+    client = PermanentlyFailingOllamaClient(response, fail_marker="UNRECOVERABLE")
+    store = EntityStore(str(tmp_path / "entities.db"))
+
+    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+
+    assert result.entity_count == 1
+    assert set(result.uncovered_chunk_ids) == {c.chunk_id for c in bad_chunks}
 
 
 class ByNameOllamaClient:

@@ -23,10 +23,33 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("file", nargs="?", help="Process a single PDF instead of the whole data dir")
     parser.add_argument("--config", default="config.yaml", help="Path to config.yaml")
+    parser.add_argument(
+        "--chat-model", help="Override config.yaml's ollama.chat_model for this run only"
+    )
+    parser.add_argument(
+        "--vision-model",
+        help='Override config.yaml\'s ollama.vision_model for this run only. Pass "none" to '
+        "disable vision processing regardless of what's configured.",
+    )
+    parser.add_argument(
+        "--embedding-model", help="Override config.yaml's ollama.embedding_model for this run only"
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
     setup_logging(config.log_level)
+
+    # CLI overrides let a single run pick a different model (e.g. a
+    # higher-quality vision model for one image-heavy document) without
+    # editing config.yaml - see session 7 notes on Ollama's single-loaded-
+    # model behavior on this CPU-only host: switching models mid-pipeline is
+    # unavoidable, but this at least avoids permanently changing the default.
+    if args.chat_model:
+        config.ollama.chat_model = args.chat_model
+    if args.vision_model:
+        config.ollama.vision_model = None if args.vision_model.lower() == "none" else args.vision_model
+    if args.embedding_model:
+        config.ollama.embedding_model = args.embedding_model
 
     ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
     registry = DocumentRegistry(config.data_storage_path)
