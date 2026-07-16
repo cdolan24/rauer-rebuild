@@ -51,8 +51,14 @@ def test_parse_entities_empty_array():
     assert _parse_entities("[]") == []
 
 
-def test_parse_entities_invalid_json_returns_empty():
-    assert _parse_entities("not json at all") == []
+def test_parse_entities_no_json_array_returns_none():
+    """None (not []) so callers can retry an unparseable response instead of
+    treating it the same as "the model legitimately found nothing"."""
+    assert _parse_entities("not json at all") is None
+
+
+def test_parse_entities_malformed_json_array_returns_none():
+    assert _parse_entities("[{not valid json,,,]") is None
 
 
 def test_parse_entities_filters_missing_fields():

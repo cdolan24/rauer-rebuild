@@ -108,16 +108,21 @@ def _build_messages(batch_text: str) -> list[dict[str, str]]:
     ]
 
 
-def _parse_entities(response_text: str) -> list[ExtractedEntity]:
-    """Parse the model's JSON-array response, tolerating extra prose around it."""
+def _parse_entities(response_text: str) -> list[ExtractedEntity] | None:
+    """Parse the model's JSON-array response, tolerating extra prose around it.
+
+    Returns None (distinct from an empty list) when the response contains no
+    parseable JSON array at all, so callers can tell "the model found nothing"
+    apart from "the response couldn't be understood" - the latter is worth
+    retrying, the former isn't.
+    """
     match = _JSON_ARRAY_RE.search(response_text)
     if not match:
-        return []
+        return None
     try:
         raw = json.loads(match.group(0))
     except json.JSONDecodeError:
-        logger.warning("Could not parse entity extraction response as JSON")
-        return []
+        return None
 
     entities = []
     for item in raw:
@@ -159,7 +164,12 @@ def extract_entities_for_document(
     A batch that fails is retried once before being given up on - a single
     timeout under concurrent load doesn't mean the same batch would fail
     again once its turn comes, and a batch that fails twice loses coverage
-    entirely (no entities from it, ever), so it's worth one retry.
+    entirely (no entities from it, ever), so it's worth one retry. This
+    applies both to a network-level failure (an `OllamaError`) and to an
+    HTTP-successful response whose body isn't a parseable JSON array - the
+    latter silently produced zero entities with no retry and wasn't counted
+    as uncovered until this fix (a real gap found extracting the full M1E
+    document: ~16/121 batches hit this).
 
     Returns an ExtractionResult with the number of distinct entities created
     and the chunk ids belonging to any batch that still failed after retry.
@@ -173,15 +183,20 @@ def extract_entities_for_document(
         i, batch = indexed_batch
         batch_text = "\n\n".join(c.text for c in batch)
         messages = _build_messages(batch_text)
-        last_error: OllamaError | None = None
+        last_error: str | None = None
         for _ in range(2):
             try:
-                return ollama_client.chat(chat_model, messages, temperature=0.2)
+                response = ollama_client.chat(chat_model, messages, temperature=0.2)
             except OllamaError as e:
-                last_error = e
-        # One slow/failed batch shouldn't lose every entity found in the
-        # other batches (and, critically, shouldn't skip mention indexing
-        # for them - that still runs below over whatever was found).
+                last_error = str(e)
+                continue
+            if _parse_entities(response) is None:
+                last_error = "response was not a parseable JSON array"
+                continue
+            return response
+        # One slow/failed/unparseable batch shouldn't lose every entity found
+        # in the other batches (and, critically, shouldn't skip mention
+        # indexing for them - that still runs below over whatever was found).
         logger.warning(
             "Entity extraction batch %d/%d failed for %s after retry, skipping: %s",
             i + 1, len(batches), document_id, last_error,
@@ -204,7 +219,7 @@ def extract_entities_for_document(
     for response in responses:
         if response is None:
             continue
-        for extracted in _parse_entities(response):
+        for extracted in _parse_entities(response) or []:
             key = extracted.name.lower()
             if key in seen_names:
                 continue
