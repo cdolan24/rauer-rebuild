@@ -28,7 +28,7 @@ An authenticated admin SHALL be able to run arbitrary SQL against the applicatio
 - **THEN** the request is rejected and no query is executed
 
 ### Requirement: Admin Endpoint Rate Limiting
-Every admin-password-gated endpoint (auth verification, database queries, PDF upload, and remote service control) SHALL reject requests from a client that has recently exceeded a fixed number of failed admin-password attempts, without evaluating the provided password.
+Every admin-password-gated endpoint (auth verification, database queries, PDF upload, remote service control, and entity merge review) SHALL reject requests from a client that has recently exceeded a fixed number of failed admin-password attempts, without evaluating the provided password.
 
 #### Scenario: Repeated wrong passwords lock out further attempts
 - **WHEN** a client submits more than the allowed number of incorrect admin passwords to an admin-gated endpoint within the lockout window
