@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import uuid
 from pathlib import Path
 
@@ -245,17 +246,17 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
     def unlock_admin(password):
         hidden = gr.update(visible=False)
         if not password:
-            return hidden, hidden, hidden, "Enter the admin password.", None
+            return hidden, hidden, hidden, hidden, "Enter the admin password.", None
         try:
             valid = client.verify_admin_password(password)
         except ApiAuthError as e:
-            return hidden, hidden, hidden, str(e), None
+            return hidden, hidden, hidden, hidden, str(e), None
         except ApiClientError as e:
-            return hidden, hidden, hidden, f"Could not reach the backend: {e}", None
+            return hidden, hidden, hidden, hidden, f"Could not reach the backend: {e}", None
         if not valid:
-            return hidden, hidden, hidden, "Incorrect admin password.", None
+            return hidden, hidden, hidden, hidden, "Incorrect admin password.", None
         shown = gr.update(visible=True)
-        return shown, shown, shown, "Unlocked.", password
+        return shown, shown, shown, shown, "Unlocked.", password
 
     def run_admin_query(sql, admin_password):
         import pandas as pd
@@ -294,6 +295,118 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                 statuses.append(f"**{service}**: unreachable ({e})")
         return " &nbsp;|&nbsp; ".join(statuses)
 
+    def _format_candidate(candidate: dict) -> str:
+        keep = candidate["keep"]
+        merged = ", ".join(f"**{e['name']}** ({e['type']}) - {e['description']}" for e in candidate["merge"])
+        return (
+            f"### Candidate {candidate['id']}\n"
+            f"Keep: **{keep['name']}** ({keep['type']}) - {keep['description']}\n\n"
+            f"Merge away: {merged}"
+        )
+
+    def start_scan(admin_password):
+        # Runs the scan (many sequential Ollama calls, can take a while on
+        # this project's CPU-only local inference) in a background thread
+        # instead of blocking this click's response - holding the Gradio
+        # queue open for that long has been observed to corrupt the
+        # browser's live connection on this environment, silently breaking
+        # this same update. Persisting to dedupe_candidates and having the
+        # admin pull results with a separate, fast request sidesteps that
+        # regardless of its exact cause.
+        def _run():
+            try:
+                client.scan_for_duplicates(admin_password or "")
+            except (ApiAuthError, ApiClientError):
+                pass  # surfaced to the admin when they check results instead
+
+        threading.Thread(target=_run, daemon=True).start()
+        return (
+            "Scan started in the background (this can take a while - one Ollama call per "
+            'candidate pair). Click "Check scan results" below once it should be done.',
+            "",
+        )
+
+    def check_scan_results(admin_password):
+        try:
+            candidates = client.list_dedupe_candidates(admin_password or "", status="pending")
+        except ApiAuthError as e:
+            return str(e), "", [], 0
+        except ApiClientError as e:
+            return f"Could not load results: {e}", "", [], 0
+        if not candidates:
+            return "No pending candidates found (scan may still be running, or found none).", "", [], 0
+        return f"{len(candidates)} candidate(s) found.", _format_candidate(candidates[0]), candidates, 0
+
+    def _review_current(action, candidates, index, admin_password):
+        if not candidates or index >= len(candidates):
+            return "No candidates left to review.", "", candidates, index
+        candidate = candidates[index]
+        try:
+            if action == "approve":
+                result = client.approve_dedupe_candidate(candidate["id"], admin_password or "")
+                status = result.get("detail") or f"Approved candidate {candidate['id']}."
+            elif action == "reject":
+                client.reject_dedupe_candidate(candidate["id"], admin_password or "")
+                status = f"Rejected candidate {candidate['id']}."
+            else:
+                client.skip_dedupe_candidate(candidate["id"], admin_password or "")
+                status = f"Skipped candidate {candidate['id']}."
+        except ApiAuthError as e:
+            return str(e), _format_candidate(candidate), candidates, index
+        except ApiClientError as e:
+            return f"Action failed: {e}", _format_candidate(candidate), candidates, index
+
+        next_index = index + 1
+        if next_index >= len(candidates):
+            return status + " No more candidates.", "", candidates, next_index
+        return status, _format_candidate(candidates[next_index]), candidates, next_index
+
+    def search_entities_for_merge(query, admin_password):
+        try:
+            entities = client.search_entities(query or "", admin_password or "")
+        except (ApiAuthError, ApiClientError) as e:
+            return gr.update(choices=[]), str(e)
+        choices = [f"{e['id']}: {e['name']} ({e['type']})" for e in entities]
+        return gr.update(choices=choices), f"{len(entities)} match(es)."
+
+    def do_manual_merge(keep_choice, merge_choice, admin_password):
+        if not keep_choice or not merge_choice:
+            return "Select both a keep and a merge-away entity."
+        keep_id = int(keep_choice.split(":")[0])
+        merge_id = int(merge_choice.split(":")[0])
+        try:
+            client.manual_merge(keep_id, merge_id, admin_password or "")
+        except ApiAuthError as e:
+            return str(e)
+        except ApiClientError as e:
+            return f"Merge failed: {e}"
+        return f"Merged entity {merge_id} into {keep_id}."
+
+    def refresh_undoable_merges(admin_password):
+        try:
+            merges = client.list_undoable_merges(admin_password or "")
+        except (ApiAuthError, ApiClientError) as e:
+            return gr.update(choices=[]), str(e)
+        choices = [
+            f"{m['merged_entity']['id']}: {m['merged_entity']['name']} "
+            f"-> kept as {m['keep']['name']} (id {m['keep']['id']})"
+            for m in merges
+        ]
+        note = f"{len(merges)} undoable merge(s). Merges from before this feature existed can't be undone."
+        return gr.update(choices=choices), note
+
+    def do_undo_merge(selected_choice, admin_password):
+        if not selected_choice:
+            return "Select a merge to undo."
+        entity_id = int(selected_choice.split(":")[0])
+        try:
+            client.undo_merge(entity_id, admin_password or "")
+        except ApiAuthError as e:
+            return str(e)
+        except ApiClientError as e:
+            return f"Undo failed: {e}"
+        return f"Undid the merge of entity {entity_id}."
+
     with gr.Blocks(
         title="Malifaux Document Explorer", head=_ENTER_TO_SEND_JS, theme=_DARK_THEME, css=_DARK_CSS
     ) as demo:
@@ -308,7 +421,7 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
 
         with gr.Row():
             with gr.Column(scale=1):
-                chatbot = gr.Chatbot(label="Chat", height=500, type="messages")
+                chatbot = gr.Chatbot(label="Chat", height=500)
                 message_box = gr.Textbox(
                     label="Ask a question",
                     placeholder="Who is...? (Enter to send, Shift+Enter for a new line)",
@@ -394,15 +507,65 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                 frontend_restart_btn = gr.Button("Restart")
             service_action_status = gr.Markdown("")
 
+        dedupe_candidates_state = gr.State([])
+        dedupe_index_state = gr.State(0)
+
+        with gr.Group(visible=False) as merge_review_group:
+            gr.Markdown("### Entity Merge Review")
+
+            gr.Markdown("#### Automated Duplicate Scan")
+            with gr.Row():
+                scan_btn = gr.Button("Scan for duplicates")
+                check_scan_btn = gr.Button("Check scan results")
+            dedupe_status = gr.Markdown("")
+            candidate_view = gr.Markdown("")
+            with gr.Row():
+                approve_btn = gr.Button("Approve (merge)", variant="primary")
+                reject_btn = gr.Button("Reject")
+                skip_btn = gr.Button("Skip")
+
+            gr.Markdown("#### Manual Merge")
+            with gr.Row():
+                with gr.Column():
+                    keep_search_box = gr.Textbox(label="Search entity to keep")
+                    keep_search_btn = gr.Button("Search")
+                    keep_dropdown = gr.Dropdown(label="Keep this entity", choices=[])
+                with gr.Column():
+                    merge_search_box = gr.Textbox(label="Search entity to merge away")
+                    merge_search_btn = gr.Button("Search")
+                    merge_dropdown = gr.Dropdown(label="Merge away this entity", choices=[])
+            manual_merge_btn = gr.Button("Merge")
+            manual_merge_status = gr.Markdown("")
+
+            gr.Markdown("#### Undo a Merge")
+            refresh_undoable_btn = gr.Button("Refresh undoable merges")
+            undoable_dropdown = gr.Dropdown(label="Merge to undo", choices=[])
+            undo_status = gr.Markdown("")
+            undo_btn = gr.Button("Undo selected merge")
+
         unlock_btn.click(
             unlock_admin,
             inputs=[unlock_password_box],
-            outputs=[upload_group, db_browser_group, service_control_group, unlock_status, admin_password_state],
+            outputs=[
+                upload_group,
+                db_browser_group,
+                service_control_group,
+                merge_review_group,
+                unlock_status,
+                admin_password_state,
+            ],
         )
         unlock_password_box.submit(
             unlock_admin,
             inputs=[unlock_password_box],
-            outputs=[upload_group, db_browser_group, service_control_group, unlock_status, admin_password_state],
+            outputs=[
+                upload_group,
+                db_browser_group,
+                service_control_group,
+                merge_review_group,
+                unlock_status,
+                admin_password_state,
+            ],
         )
 
         upload_file.upload(
@@ -426,6 +589,46 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                     inputs=[admin_password_state],
                     outputs=[service_action_status],
                 )
+
+        scan_btn.click(
+            start_scan,
+            inputs=[admin_password_state],
+            outputs=[dedupe_status, candidate_view],
+        )
+        check_scan_btn.click(
+            check_scan_results,
+            inputs=[admin_password_state],
+            outputs=[dedupe_status, candidate_view, dedupe_candidates_state, dedupe_index_state],
+        )
+        for action, btn in [("approve", approve_btn), ("reject", reject_btn), ("skip", skip_btn)]:
+            btn.click(
+                lambda candidates, index, pw, action=action: _review_current(action, candidates, index, pw),
+                inputs=[dedupe_candidates_state, dedupe_index_state, admin_password_state],
+                outputs=[dedupe_status, candidate_view, dedupe_candidates_state, dedupe_index_state],
+            )
+
+        keep_search_btn.click(
+            search_entities_for_merge,
+            inputs=[keep_search_box, admin_password_state],
+            outputs=[keep_dropdown, manual_merge_status],
+        )
+        merge_search_btn.click(
+            search_entities_for_merge,
+            inputs=[merge_search_box, admin_password_state],
+            outputs=[merge_dropdown, manual_merge_status],
+        )
+        manual_merge_btn.click(
+            do_manual_merge,
+            inputs=[keep_dropdown, merge_dropdown, admin_password_state],
+            outputs=[manual_merge_status],
+        )
+
+        refresh_undoable_btn.click(
+            refresh_undoable_merges, inputs=[admin_password_state], outputs=[undoable_dropdown, undo_status]
+        )
+        undo_btn.click(
+            do_undo_merge, inputs=[undoable_dropdown, admin_password_state], outputs=[undo_status]
+        )
 
     return demo
 

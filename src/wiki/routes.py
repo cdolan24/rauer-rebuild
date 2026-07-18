@@ -103,6 +103,8 @@ def wiki_graph(request: Request) -> HTMLResponse:
     ]
     edges = [
         {
+            "source_id": r.entity_id,
+            "target_id": r.related_entity_id,
             "x1": positions[r.entity_id][0],
             "y1": positions[r.entity_id][1],
             "x2": positions[r.related_entity_id][0],

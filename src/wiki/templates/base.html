@@ -150,11 +150,16 @@
 
         /* Relationship graph - a plain circular node-link layout, computed
            server-side, no client-side JS or graph library needed. */
-        .graph-svg { width: 100%; height: auto; max-height: 640px; }
-        .graph-edge { stroke: var(--border); stroke-width: 1; }
-        .graph-node { fill: var(--crimson); stroke: var(--gold); stroke-width: 1; }
+        .graph-svg { width: 100%; height: auto; max-height: 640px; touch-action: none; cursor: grab; }
+        .graph-svg:active { cursor: grabbing; }
+        .graph-edge { stroke: var(--border); stroke-width: 1; transition: opacity 0.15s ease; }
+        .graph-node { fill: var(--crimson); stroke: var(--gold); stroke-width: 1; cursor: pointer; }
         .graph-node:hover { fill: var(--gold); }
         .graph-label { fill: var(--ink); font-size: 11px; font-family: "EB Garamond", Georgia, serif; }
+        .graph-node-group { transition: opacity 0.15s ease; }
+        .graph-node-group.graph-dim, .graph-edge.graph-dim { opacity: 0.15; }
+        .graph-node-group.graph-highlight .graph-node { fill: var(--gold); stroke: var(--crimson-bright); stroke-width: 2; }
+        .graph-node-group.graph-highlight .graph-label { fill: var(--gold); font-weight: 600; }
     </style>
 </head>
 <body>

@@ -6,17 +6,138 @@
 {% block content %}
 <h1>Relationship Graph</h1>
 {% if nodes %}
-<svg viewBox="0 0 600 600" class="graph-svg">
+<input type="text" id="graph-search" placeholder="Search entities by name...">
+<svg viewBox="0 0 600 600" class="graph-svg" id="graph-svg">
+    <g id="graph-edges">
     {% for edge in edges %}
-    <line x1="{{ edge.x1 }}" y1="{{ edge.y1 }}" x2="{{ edge.x2 }}" y2="{{ edge.y2 }}" class="graph-edge" />
+    <line x1="{{ edge.x1 }}" y1="{{ edge.y1 }}" x2="{{ edge.x2 }}" y2="{{ edge.y2 }}"
+          class="graph-edge" data-source="{{ edge.source_id }}" data-target="{{ edge.target_id }}" />
     {% endfor %}
+    </g>
+    <g id="graph-nodes">
     {% for node in nodes %}
-    <a href="/wiki/entity/{{ node.id }}">
+    <g class="graph-node-group" data-id="{{ node.id }}" data-name="{{ node.name|lower }}">
         <circle cx="{{ node.x }}" cy="{{ node.y }}" r="8" class="graph-node" />
-        <text x="{{ node.x }}" y="{{ node.y - 12 }}" text-anchor="middle" class="graph-label">{{ node.name }}</text>
-    </a>
+        <a href="/wiki/entity/{{ node.id }}">
+            <text x="{{ node.x }}" y="{{ node.y - 12 }}" text-anchor="middle" class="graph-label">{{ node.name }}</text>
+        </a>
+    </g>
     {% endfor %}
+    </g>
 </svg>
+<script type="application/json" id="graph-data">{{ {"nodes": nodes, "edges": edges}|tojson }}</script>
+<script>
+(function () {
+    var data = JSON.parse(document.getElementById('graph-data').textContent);
+    var svg = document.getElementById('graph-svg');
+    var searchBox = document.getElementById('graph-search');
+
+    var adjacency = {};
+    data.nodes.forEach(function (n) { adjacency[n.id] = new Set(); });
+    data.edges.forEach(function (e) {
+        adjacency[e.source_id].add(e.target_id);
+        adjacency[e.target_id].add(e.source_id);
+    });
+
+    var focusedId = null;
+
+    function clearFocus() {
+        focusedId = null;
+        svg.querySelectorAll('.graph-node-group').forEach(function (g) {
+            g.classList.remove('graph-dim', 'graph-highlight');
+        });
+        svg.querySelectorAll('.graph-edge').forEach(function (e) {
+            e.classList.remove('graph-dim');
+        });
+    }
+
+    function setFocus(nodeId) {
+        if (focusedId === nodeId) {
+            clearFocus();
+            return;
+        }
+        focusedId = nodeId;
+        var neighbors = adjacency[nodeId] || new Set();
+        svg.querySelectorAll('.graph-node-group').forEach(function (g) {
+            var id = Number(g.dataset.id);
+            var active = id === nodeId || neighbors.has(id);
+            g.classList.toggle('graph-dim', !active);
+            g.classList.toggle('graph-highlight', id === nodeId);
+        });
+        svg.querySelectorAll('.graph-edge').forEach(function (e) {
+            var active = Number(e.dataset.source) === nodeId || Number(e.dataset.target) === nodeId;
+            e.classList.toggle('graph-dim', !active);
+        });
+    }
+
+    svg.querySelectorAll('.graph-node-group').forEach(function (g) {
+        g.querySelector('.graph-node').addEventListener('click', function () {
+            setFocus(Number(g.dataset.id));
+        });
+    });
+
+    searchBox.addEventListener('input', function () {
+        var query = searchBox.value.trim().toLowerCase();
+        if (!query) {
+            clearFocus();
+            return;
+        }
+        var match = data.nodes.find(function (n) { return n.name.toLowerCase().includes(query); });
+        if (match) {
+            focusedId = null; // force setFocus to (re)apply even if same node as before
+            setFocus(match.id);
+        }
+    });
+
+    // Pan (pointer drag) and zoom (wheel) via viewBox.
+    var viewBox = { x: 0, y: 0, w: 600, h: 600 };
+    function applyViewBox() {
+        svg.setAttribute('viewBox', viewBox.x + ' ' + viewBox.y + ' ' + viewBox.w + ' ' + viewBox.h);
+    }
+
+    svg.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        var point = clientToSvg(e.clientX, e.clientY);
+        var scale = e.deltaY > 0 ? 1.1 : 0.9;
+        var newW = Math.max(60, Math.min(2400, viewBox.w * scale));
+        var newH = Math.max(60, Math.min(2400, viewBox.h * scale));
+        viewBox.x = point.x - (point.x - viewBox.x) * (newW / viewBox.w);
+        viewBox.y = point.y - (point.y - viewBox.y) * (newH / viewBox.h);
+        viewBox.w = newW;
+        viewBox.h = newH;
+        applyViewBox();
+    }, { passive: false });
+
+    function clientToSvg(clientX, clientY) {
+        var pt = svg.createSVGPoint();
+        pt.x = clientX;
+        pt.y = clientY;
+        var ctm = svg.getScreenCTM();
+        return ctm ? pt.matrixTransform(ctm.inverse()) : { x: clientX, y: clientY };
+    }
+
+    var dragging = false;
+    var lastPoint = null;
+
+    svg.addEventListener('pointerdown', function (e) {
+        dragging = true;
+        lastPoint = clientToSvg(e.clientX, e.clientY);
+        svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove', function (e) {
+        if (!dragging) {
+            return;
+        }
+        var point = clientToSvg(e.clientX, e.clientY);
+        viewBox.x -= (point.x - lastPoint.x);
+        viewBox.y -= (point.y - lastPoint.y);
+        applyViewBox();
+        lastPoint = clientToSvg(e.clientX, e.clientY);
+    });
+    svg.addEventListener('pointerup', function () { dragging = false; });
+    svg.addEventListener('pointerleave', function () { dragging = false; });
+})();
+</script>
 {% else %}
 <p>No relationships have been extracted yet.</p>
 {% endif %}
