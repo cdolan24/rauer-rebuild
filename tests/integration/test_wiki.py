@@ -107,27 +107,33 @@ def test_wiki_sidebar_links_to_locations_page(api_client):
     assert 'href="/wiki/locations"' in response.text
 
 
-def test_wiki_graph_page_shows_related_entities(api_client):
+def test_wiki_graph_page_renders_empty_by_default(api_client):
+    # The graph page no longer lays out the whole entity/relationship graph
+    # on load (illegible at real ~900-node scale) - it renders a search box
+    # and nothing drawn, regardless of how many relationships exist, until
+    # the client fetches a specific entity's neighborhood via /wiki/graph/data.
     store = api_client.app.state.entity_store
     justice_id = store.add_entity("doc1", "Lady Justice", "character", "desc")
     guild_id = store.add_entity("doc1", "The Guild", "faction", "desc")
-    store.add_entity("doc1", "Unrelated Entity", "character", "desc")  # no relationships
     store.add_relationship(justice_id, guild_id, "member of")
 
     response = api_client.get("/wiki/graph")
 
     assert response.status_code == 200
-    assert "Lady Justice" in response.text
-    assert "The Guild" in response.text
-    assert "Unrelated Entity" not in response.text  # not part of any relationship
-    assert f'href="/wiki/entity/{justice_id}"' in response.text
+    assert "Lady Justice" not in response.text
+    assert "The Guild" not in response.text
+    assert 'id="graph-search"' in response.text
 
 
 def test_wiki_graph_page_empty_state(api_client):
+    # Distinct from the "renders empty by default" case above: this is the
+    # true zero-relationships-in-the-database state, which the page should
+    # still render normally (nothing new to assert about node/edge markup
+    # since the page never draws any on load either way now).
     response = api_client.get("/wiki/graph")
 
     assert response.status_code == 200
-    assert "No relationships have been extracted yet." in response.text
+    assert 'id="graph-search"' in response.text
 
 
 def test_wiki_sidebar_links_to_graph_page(api_client):
@@ -135,6 +141,65 @@ def test_wiki_sidebar_links_to_graph_page(api_client):
 
     assert response.status_code == 200
     assert 'href="/wiki/graph"' in response.text
+
+
+def test_wiki_graph_data_returns_entity_and_direct_neighbors(api_client):
+    store = api_client.app.state.entity_store
+    justice_id = store.add_entity("doc1", "Lady Justice", "character", "desc")
+    guild_id = store.add_entity("doc1", "The Guild", "faction", "desc")
+    unrelated_id = store.add_entity("doc1", "Unrelated Entity", "character", "desc")
+    store.add_relationship(justice_id, guild_id, "member of")
+
+    response = api_client.get(f"/wiki/graph/data?entity_id={justice_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    node_ids = {node["id"] for node in data["nodes"]}
+    assert node_ids == {justice_id, guild_id}
+    assert unrelated_id not in node_ids
+    assert len(data["edges"]) == 1
+    assert data["edges"][0]["source_id"] == justice_id
+    assert data["edges"][0]["target_id"] == guild_id
+
+
+def test_wiki_graph_data_unknown_entity_404s(api_client):
+    response = api_client.get("/wiki/graph/data?entity_id=999999")
+
+    assert response.status_code == 404
+
+
+def test_wiki_graph_data_entity_with_no_relationships(api_client):
+    store = api_client.app.state.entity_store
+    lone_id = store.add_entity("doc1", "Lonely Entity", "character", "desc")
+
+    response = api_client.get(f"/wiki/graph/data?entity_id={lone_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [node["id"] for node in data["nodes"]] == [lone_id]
+    assert data["edges"] == []
+
+
+def test_wiki_graph_search_matches_by_substring_case_insensitive(api_client):
+    store = api_client.app.state.entity_store
+    justice_id = store.add_entity("doc1", "Lady Justice", "character", "desc")
+    store.add_entity("doc1", "The Guild", "faction", "desc")
+
+    response = api_client.get("/wiki/graph/search?q=justice")
+
+    assert response.status_code == 200
+    matches = response.json()
+    assert matches == [{"id": justice_id, "name": "Lady Justice"}]
+
+
+def test_wiki_graph_search_empty_query_returns_no_matches(api_client):
+    store = api_client.app.state.entity_store
+    store.add_entity("doc1", "Lady Justice", "character", "desc")
+
+    response = api_client.get("/wiki/graph/search?q=")
+
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_wiki_entity_page_generates_and_caches_summary(api_client):
@@ -160,6 +225,16 @@ def test_wiki_entity_page_generates_and_caches_summary(api_client):
 def test_wiki_entity_not_found(api_client):
     response = api_client.get("/wiki/entity/999999")
     assert response.status_code == 404
+
+
+def test_wiki_entity_page_links_to_graph_focused_on_itself(api_client):
+    store = api_client.app.state.entity_store
+    entity_id = store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
+
+    response = api_client.get(f"/wiki/entity/{entity_id}")
+
+    assert response.status_code == 200
+    assert f'href="/wiki/graph?focus={entity_id}"' in response.text
 
 
 def test_wiki_entity_page_lists_relationships(api_client):
