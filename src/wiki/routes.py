@@ -94,7 +94,7 @@ def _neighborhood_layout(entity, related_entities: list) -> tuple[list[dict], li
             center + radius * math.sin(2 * math.pi * i / count),
         )
     nodes = [
-        {"id": e.id, "name": e.name, "x": positions[e.id][0], "y": positions[e.id][1]}
+        {"id": e.id, "name": e.name, "type": e.type, "x": positions[e.id][0], "y": positions[e.id][1]}
         for e in [entity, *related_entities]
     ]
     return nodes, positions

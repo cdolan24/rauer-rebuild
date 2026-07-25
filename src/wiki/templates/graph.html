@@ -13,6 +13,7 @@
     <g id="graph-edges"></g>
     <g id="graph-nodes"></g>
 </svg>
+<div id="graph-tooltip" class="graph-tooltip" style="display: none;"></div>
 <script>
 (function () {
     var svg = document.getElementById('graph-svg');
@@ -21,7 +22,29 @@
     var searchBox = document.getElementById('graph-search');
     var resultsList = document.getElementById('graph-search-results');
     var emptyMessage = document.getElementById('graph-empty');
+    var tooltip = document.getElementById('graph-tooltip');
+    var tooltipHideTimer = null;
     var SVG_NS = 'http://www.w3.org/2000/svg';
+
+    // Hover preview: shows the entity's name/type and a link to its wiki
+    // page without leaving the graph, so seeing that page doesn't require
+    // clicking a node (which instead reloads that node's own neighborhood).
+    function showTooltip(node, clientX, clientY) {
+        clearTimeout(tooltipHideTimer);
+        var typeLabel = node.type ? ' <span class="graph-tooltip-type">(' + node.type + ')</span>' : '';
+        tooltip.innerHTML = '<strong>' + node.name + '</strong>' + typeLabel +
+            '<br><a href="/wiki/entity/' + node.id + '">View wiki page &rarr;</a>';
+        tooltip.style.left = (clientX + 12) + 'px';
+        tooltip.style.top = (clientY + 12) + 'px';
+        tooltip.style.display = 'block';
+    }
+
+    function scheduleHideTooltip() {
+        tooltipHideTimer = setTimeout(function () { tooltip.style.display = 'none'; }, 200);
+    }
+
+    tooltip.addEventListener('pointerenter', function () { clearTimeout(tooltipHideTimer); });
+    tooltip.addEventListener('pointerleave', scheduleHideTooltip);
 
     function clearResults() {
         resultsList.innerHTML = '';
@@ -60,6 +83,8 @@
             link.appendChild(text);
 
             circle.addEventListener('click', function () { loadNeighborhood(node.id); });
+            circle.addEventListener('pointerenter', function (e) { showTooltip(node, e.clientX, e.clientY); });
+            circle.addEventListener('pointerleave', scheduleHideTooltip);
             group.appendChild(circle);
             group.appendChild(link);
             nodesGroup.appendChild(group);
@@ -144,6 +169,12 @@
     var lastPoint = null;
 
     svg.addEventListener('pointerdown', function (e) {
+        // Capturing the pointer retargets the resulting click event to the
+        // svg itself, which would swallow node/label clicks - only start a
+        // drag when the pointerdown didn't land on a node.
+        if (e.target.closest('.graph-node-group')) {
+            return;
+        }
         dragging = true;
         lastPoint = clientToSvg(e.clientX, e.clientY);
         svg.setPointerCapture(e.pointerId);
