@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.database.entity_store import EntityStore
 from src.pipeline.ingest import _prepare_wiki_data
+from src.utils.chat_backend import OllamaChatBackend
 from src.utils.ollama_client import OllamaError
 
 
@@ -50,7 +51,7 @@ def test_prepare_wiki_data_does_not_automatically_deduplicate(tmp_path):
     store.add_entity("doc2", "Samael", "character", "")  # an obvious name-variant duplicate
     client = ScriptedPrepClient()
 
-    _prepare_wiki_data(store, FakeVectorStore(), client, "fake-chat")
+    _prepare_wiki_data(store, FakeVectorStore(), OllamaChatBackend(client, "fake-chat", None))
 
     assert len(store.list_all()) == 2  # neither entity was merged away
 
@@ -60,7 +61,7 @@ def test_prepare_wiki_data_generates_summaries_for_entities_missing_one(tmp_path
     store.add_entity("doc1", "Lady Justice", "character", "A Guild enforcer.")
     client = ScriptedPrepClient()
 
-    _prepare_wiki_data(store, FakeVectorStore(), client, "fake-chat")
+    _prepare_wiki_data(store, FakeVectorStore(), OllamaChatBackend(client, "fake-chat", None))
 
     entity = store.list_all()[0]
     assert entity.summary == "A generated summary."
@@ -73,7 +74,7 @@ def test_prepare_wiki_data_skips_entities_that_already_have_a_summary(tmp_path):
     store.set_summary(entity_id, "Already summarized.")
     client = ScriptedPrepClient()
 
-    _prepare_wiki_data(store, FakeVectorStore(), client, "fake-chat")
+    _prepare_wiki_data(store, FakeVectorStore(), OllamaChatBackend(client, "fake-chat", None))
 
     assert client.summary_calls == 0
     assert store.get(entity_id).summary == "Already summarized."
@@ -86,6 +87,6 @@ def test_prepare_wiki_data_does_not_raise_when_ollama_is_unreachable(tmp_path):
 
     # Exercises the summary-generation and relationship-extraction failure
     # paths - both already tolerate OllamaError internally.
-    _prepare_wiki_data(store, FakeVectorStore(), client, "fake-chat")  # should not raise
+    _prepare_wiki_data(store, FakeVectorStore(), OllamaChatBackend(client, "fake-chat", None))  # should not raise
 
     assert store.list_all()[0].summary is None

@@ -7,7 +7,7 @@ from src.database.entity_store import EntityStore
 from src.database.vector_store import VectorStore
 from src.pipeline import ingest
 from src.pipeline.pdf_extractor import PDFExtractionError
-from src.utils.ollama_client import OllamaError
+from src.utils.chat_backend import ChatBackendError, OllamaChatBackend
 
 
 def _make_pdf(path, page_texts: list[str]) -> None:
@@ -63,8 +63,8 @@ def test_ingest_pdf_succeeds_even_if_wiki_prep_fails(tmp_path, fake_ollama_clien
     vector_store = VectorStore(str(tmp_path / "vector_db"), "test")
     entity_store = EntityStore(str(tmp_path / "entities.db"))
 
-    def _raise(entity_store, vector_store, ollama_client, chat_model):
-        raise OllamaError("simulated dedup/summary failure")
+    def _raise(entity_store, vector_store, chat_backend):
+        raise ChatBackendError("simulated dedup/summary failure")
 
     monkeypatch.setattr(ingest, "_prepare_wiki_data", _raise)
 
@@ -78,7 +78,7 @@ def test_ingest_pdf_succeeds_even_if_wiki_prep_fails(tmp_path, fake_ollama_clien
         150,
         str(tmp_path / "processed"),
         entity_store=entity_store,
-        chat_model="fake-chat",
+        chat_backend=OllamaChatBackend(fake_ollama_client, "fake-chat", None),
     )
 
     assert ok is True

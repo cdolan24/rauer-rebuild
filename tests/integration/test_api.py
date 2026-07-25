@@ -19,6 +19,8 @@ def test_health_endpoint_healthy(api_client):
     data = response.json()
     assert data["status"] == "healthy"
     assert data["ollama"] == "connected"
+    assert data["chat_backend"] == "ollama"
+    assert data["chat_backend_status"] == "connected"
 
 
 def test_health_endpoint_ollama_unreachable(unhealthy_api_client):
@@ -28,11 +30,46 @@ def test_health_endpoint_ollama_unreachable(unhealthy_api_client):
     data = response.json()
     assert data["status"] == "degraded"
     assert data["ollama"] == "unreachable"
+    # Default chat_backend is Ollama too, so it fails right along with embeddings.
+    assert data["chat_backend_status"] == "unreachable"
+
+
+def test_health_endpoint_reports_chat_backend_separately_from_embeddings(
+    hosted_backend_unreachable_api_client,
+):
+    """Embeddings (always Ollama) and the configured chat backend can fail
+    independently - the health endpoint should say which one is actually down
+    rather than reporting a single conflated Ollama status."""
+    response = hosted_backend_unreachable_api_client.get("/api/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "degraded"
+    assert data["ollama"] == "connected"  # embeddings still fine
+    assert data["chat_backend"] == "hosted_api"
+    assert data["chat_backend_status"] == "unreachable"
 
 
 def test_chat_endpoint_returns_503_when_ollama_unavailable(unhealthy_api_client):
     response = unhealthy_api_client.post(
         "/api/chat", json={"message": "Who is Aragorn?", "conversation_id": "conv-unhealthy"}
+    )
+
+    assert response.status_code == 503
+    assert "Local LLM service unavailable" in response.json()["detail"]
+
+
+def test_chat_endpoint_returns_503_when_chat_backend_fails_after_successful_retrieval(
+    chat_backend_failing_api_client,
+):
+    """Regression test: a live hosted-API 401 surfaced that chat.py only
+    caught OllamaError, so once retrieval succeeded (embeddings fine) a
+    ChatBackendError raised by chat generation itself propagated as an
+    unhandled 500 instead of the intended 503."""
+    _seed_document(chat_backend_failing_api_client)
+
+    response = chat_backend_failing_api_client.post(
+        "/api/chat", json={"message": "Who is Aragorn?", "conversation_id": "conv-hosted-fail"}
     )
 
     assert response.status_code == 503

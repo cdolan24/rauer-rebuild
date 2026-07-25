@@ -12,6 +12,7 @@ from src.database.document_registry import DocumentRegistry
 from src.database.entity_store import EntityStore
 from src.database.vector_store import VectorStore
 from src.pipeline.entity_extractor import extract_entities_for_document
+from src.utils.chat_backend import build_chat_backend
 from src.utils.config import load_config
 from src.utils.logging import get_logger, setup_logging
 from src.utils.ollama_client import OllamaClient
@@ -29,6 +30,7 @@ def main() -> int:
     setup_logging(config.log_level)
 
     ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
+    chat_backend = build_chat_backend(config, ollama_client)
     registry = DocumentRegistry(config.data_storage_path)
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
     entity_store = EntityStore(config.data_storage_path)
@@ -47,9 +49,7 @@ def main() -> int:
         if not chunks:
             logger.warning("No chunks found for %s, skipping.", document_id)
             continue
-        result = extract_entities_for_document(
-            chunks, document_id, ollama_client, config.ollama.chat_model, entity_store
-        )
+        result = extract_entities_for_document(chunks, document_id, chat_backend, entity_store)
         logger.info(
             "Extracted %d entities for %s (%d chunks, %d uncovered)",
             result.entity_count, document_id, len(chunks), len(result.uncovered_chunk_ids),

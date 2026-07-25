@@ -81,6 +81,11 @@ class HealthResponse(BaseModel):
     vector_db: str
     models_loaded: list[str]
     documents_indexed: int
+    # The configured chat-generation backend ("ollama" or "hosted_api") and
+    # its own reachability - separate from `ollama` above, which reports the
+    # embeddings dependency that's always active regardless of chat backend.
+    chat_backend: str
+    chat_backend_status: str
 
 
 class AdminAuthRequest(BaseModel):
@@ -166,3 +171,36 @@ class UndoMergeRequest(BaseModel):
 class UndoMergeResponse(BaseModel):
     entity_id: int
     restored: bool
+
+
+class HostedLlmConfigModel(BaseModel):
+    model: str
+    max_tokens: int
+    api_key_configured: bool
+
+
+class GpuInfoModel(BaseModel):
+    detected: bool
+    name: str | None = None
+
+
+class BackendConfigResponse(BaseModel):
+    # What the running process actually loaded at startup - not necessarily
+    # the same as saved_chat_backend if a save happened without a restart.
+    active_chat_backend: str
+    saved_chat_backend: str
+    hosted_llm: HostedLlmConfigModel
+    gpu: GpuInfoModel
+
+
+class SetBackendConfigRequest(BaseModel):
+    admin_password: str
+    chat_backend: str
+    hosted_llm_model: str | None = None
+    hosted_llm_api_key: str | None = None
+    hosted_llm_max_tokens: int | None = None
+
+
+class SetBackendConfigResponse(BaseModel):
+    saved_chat_backend: str
+    restart_required: bool = True

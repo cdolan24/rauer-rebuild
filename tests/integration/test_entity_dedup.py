@@ -4,6 +4,7 @@ import threading
 
 from src.database.entity_store import Entity
 from src.pipeline.entity_deduper import find_duplicate_groups
+from src.utils.chat_backend import OllamaChatBackend
 from src.utils.ollama_client import OllamaError
 
 
@@ -17,7 +18,7 @@ class ScriptedConfirmClient:
         self.calls = 0
         self._lock = threading.Lock()
 
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         with self._lock:
             self.calls += 1
         content = messages[-1]["content"]
@@ -35,7 +36,7 @@ class ScriptedConfirmClient:
 
 
 class FailingConfirmClient:
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         raise OllamaError("simulated failure")
 
     def embed(self, model, text):
@@ -56,7 +57,7 @@ def test_find_duplicate_groups_merges_confirmed_pair():
     ]
     client = ScriptedConfirmClient({frozenset({"Samael Hopkins", "Samael"})})
 
-    groups = find_duplicate_groups(entities, client, "fake-chat")
+    groups = find_duplicate_groups(entities, OllamaChatBackend(client, "fake-chat", None))
 
     assert len(groups) == 1
     assert groups[0].keep_id == 1  # the one with the longer description
@@ -70,7 +71,7 @@ def test_find_duplicate_groups_exact_name_match_needs_no_llm_call():
     ]
     client = ScriptedConfirmClient(set())  # would deny if asked - but it's never asked
 
-    groups = find_duplicate_groups(entities, client, "fake-chat")
+    groups = find_duplicate_groups(entities, OllamaChatBackend(client, "fake-chat", None))
 
     assert client.calls == 0
     assert len(groups) == 1
@@ -84,7 +85,7 @@ def test_find_duplicate_groups_denied_pair_is_not_merged():
     # confirm no groups come back and no call was made.
     client = ScriptedConfirmClient(set())
 
-    groups = find_duplicate_groups(entities, client, "fake-chat")
+    groups = find_duplicate_groups(entities, OllamaChatBackend(client, "fake-chat", None))
 
     assert groups == []
     assert client.calls == 0
@@ -103,7 +104,7 @@ def test_find_duplicate_groups_transitively_unions_a_chain():
         }
     )
 
-    groups = find_duplicate_groups(entities, client, "fake-chat")
+    groups = find_duplicate_groups(entities, OllamaChatBackend(client, "fake-chat", None))
 
     assert len(groups) == 1
     assert groups[0].keep_id == 3
@@ -114,6 +115,6 @@ def test_find_duplicate_groups_skips_pair_on_ollama_error():
     entities = [_entity(1, "Samael Hopkins"), _entity(2, "Samael")]
     client = FailingConfirmClient()
 
-    groups = find_duplicate_groups(entities, client, "fake-chat")
+    groups = find_duplicate_groups(entities, OllamaChatBackend(client, "fake-chat", None))
 
     assert groups == []

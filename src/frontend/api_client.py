@@ -159,6 +159,26 @@ class ApiClient:
     def undo_merge(self, entity_id: int, admin_password: str) -> dict:
         return self._admin_post(f"/api/admin/merges/{entity_id}/undo", admin_password)
 
+    def get_backend_config(self, admin_password: str) -> dict:
+        return self._admin_get("/api/admin/backend-config", admin_password)
+
+    def set_backend_config(
+        self,
+        admin_password: str,
+        chat_backend: str,
+        hosted_llm_model: str | None = None,
+        hosted_llm_api_key: str | None = None,
+        hosted_llm_max_tokens: int | None = None,
+    ) -> dict:
+        return self._admin_post(
+            "/api/admin/backend-config",
+            admin_password,
+            chat_backend=chat_backend,
+            hosted_llm_model=hosted_llm_model,
+            hosted_llm_api_key=hosted_llm_api_key,
+            hosted_llm_max_tokens=hosted_llm_max_tokens,
+        )
+
     def verify_admin_password(self, admin_password: str) -> bool:
         try:
             response = httpx.post(

@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from src.database.entity_store import Entity
+from src.utils.chat_backend import ChatBackend, ChatBackendError
 from src.utils.logging import get_logger
-from src.utils.ollama_client import OllamaClient, OllamaError
 
 logger = get_logger(__name__)
 
@@ -73,9 +73,7 @@ def _candidate_pairs(entities: list[Entity]) -> list[tuple[Entity, Entity]]:
     return pairs
 
 
-def _confirm_pair(
-    pair: tuple[Entity, Entity], ollama_client: OllamaClient, chat_model: str
-) -> bool:
+def _confirm_pair(pair: tuple[Entity, Entity], chat_backend: ChatBackend) -> bool:
     entity_a, entity_b = pair
     if _normalize(entity_a.name) == _normalize(entity_b.name):
         # Exact-name duplicates (case/punctuation aside) need no LLM
@@ -93,8 +91,8 @@ def _confirm_pair(
         },
     ]
     try:
-        response = ollama_client.chat(chat_model, messages, temperature=0.0)
-    except OllamaError as e:
+        response = chat_backend.chat(messages, temperature=0.0)
+    except ChatBackendError as e:
         logger.warning(
             "Duplicate-pair confirmation failed for '%s' / '%s', skipping: %s",
             entity_a.name, entity_b.name, e,
@@ -123,8 +121,7 @@ class _UnionFind:
 
 def find_duplicate_groups(
     entities: list[Entity],
-    ollama_client: OllamaClient,
-    chat_model: str,
+    chat_backend: ChatBackend,
     max_workers: int = MAX_WORKERS,
 ) -> list[MergeGroup]:
     """Find same-type entities that are likely the same underlying entity
@@ -144,7 +141,7 @@ def find_duplicate_groups(
         return []
 
     def _check(pair: tuple[Entity, Entity]) -> tuple[int, int, bool]:
-        confirmed = _confirm_pair(pair, ollama_client, chat_model)
+        confirmed = _confirm_pair(pair, chat_backend)
         return pair[0].id, pair[1].id, confirmed
 
     with ThreadPoolExecutor(max_workers=min(max_workers, len(pairs))) as executor:

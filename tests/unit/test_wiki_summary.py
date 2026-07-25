@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.database.entity_store import Entity
+from src.utils.chat_backend import OllamaChatBackend
 from src.wiki.summary import generate_entity_summary
 
 
@@ -32,7 +33,7 @@ def test_generate_entity_summary_includes_mention_context_in_prompt():
 
     summary = generate_entity_summary(
         _entity(), mention_count=3, mention_context="She drew her revolver in Bree.",
-        ollama_client=client, chat_model="fake-chat",
+        chat_backend=OllamaChatBackend(client, "fake-chat", None),
     )
 
     assert summary == "A long article about Lady Justice."
@@ -46,7 +47,7 @@ def test_generate_entity_summary_handles_empty_mention_context():
 
     summary = generate_entity_summary(
         _entity(), mention_count=0, mention_context="",
-        ollama_client=client, chat_model="fake-chat",
+        chat_backend=OllamaChatBackend(client, "fake-chat", None),
     )
 
     assert summary == "A short article based on known facts alone."

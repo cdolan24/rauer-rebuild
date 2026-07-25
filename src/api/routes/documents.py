@@ -99,6 +99,7 @@ async def upload_document(
     entity_store = request.app.state.entity_store
     vector_store = request.app.state.vector_store
     ollama_client = request.app.state.ollama_client
+    chat_backend = request.app.state.chat_backend
 
     data_dir = Path(config.paths.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -120,7 +121,7 @@ async def upload_document(
         config.chunking.chunk_overlap,
         config.paths.processed_dir,
         entity_store=entity_store,
-        chat_model=config.ollama.chat_model,
+        chat_backend=chat_backend,
         vision_model=config.ollama.vision_model,
     )
 

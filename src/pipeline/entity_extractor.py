@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 from src.database.entity_store import Entity, EntityMention, EntityStore
 from src.pipeline.chunker import Chunk
+from src.utils.chat_backend import ChatBackend, ChatBackendError
 from src.utils.logging import get_logger
-from src.utils.ollama_client import OllamaClient, OllamaError
 
 logger = get_logger(__name__)
 
@@ -148,8 +148,7 @@ def _parse_entities(response_text: str) -> list[ExtractedEntity] | None:
 def extract_entities_for_document(
     chunks: list[Chunk],
     document_id: str,
-    ollama_client: OllamaClient,
-    chat_model: str,
+    chat_backend: ChatBackend,
     entity_store: EntityStore,
     max_workers: int = MAX_WORKERS,
 ) -> ExtractionResult:
@@ -186,8 +185,8 @@ def extract_entities_for_document(
         last_error: str | None = None
         for _ in range(2):
             try:
-                response = ollama_client.chat(chat_model, messages, temperature=0.2)
-            except OllamaError as e:
+                response = chat_backend.chat(messages, temperature=0.2)
+            except ChatBackendError as e:
                 last_error = str(e)
                 continue
             if _parse_entities(response) is None:
@@ -281,8 +280,7 @@ def _parse_reclassification(response_text: str) -> str | None:
 
 def reclassify_entities(
     entities: list[Entity],
-    ollama_client: OllamaClient,
-    chat_model: str,
+    chat_backend: ChatBackend,
     max_workers: int = MAX_WORKERS,
 ) -> dict[int, str]:
     """Re-type existing entities against the current taxonomy from their
@@ -307,8 +305,8 @@ def reclassify_entities(
             return entity.id, entity.type, entity.type
         messages = _build_reclassify_messages(entity)
         try:
-            response = ollama_client.chat(chat_model, messages, temperature=0.0)
-        except OllamaError as e:
+            response = chat_backend.chat(messages, temperature=0.0)
+        except ChatBackendError as e:
             logger.warning(
                 "Reclassification failed for entity %d (%s), keeping type '%s': %s",
                 entity.id, entity.name, entity.type, e,

@@ -12,6 +12,7 @@ from src.database.document_registry import DocumentRegistry
 from src.database.entity_store import EntityStore
 from src.database.vector_store import VectorStore
 from src.pipeline.ingest import ingest_pdf
+from src.utils.chat_backend import build_chat_backend
 from src.utils.config import load_config
 from src.utils.logging import get_logger, setup_logging
 from src.utils.ollama_client import OllamaClient
@@ -52,6 +53,7 @@ def main() -> int:
         config.ollama.embedding_model = args.embedding_model
 
     ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
+    chat_backend = build_chat_backend(config, ollama_client)
     registry = DocumentRegistry(config.data_storage_path)
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
     entity_store = EntityStore(config.data_storage_path)
@@ -78,7 +80,7 @@ def main() -> int:
             config.chunking.chunk_overlap,
             config.paths.processed_dir,
             entity_store=entity_store,
-            chat_model=config.ollama.chat_model,
+            chat_backend=chat_backend,
             vision_model=config.ollama.vision_model,
         )
         succeeded += int(ok)

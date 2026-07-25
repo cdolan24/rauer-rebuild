@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from src.database.entity_store import Entity, EntityStore
 from src.database.vector_store import VectorStore
 from src.pipeline.mention_context import gather_mention_context
+from src.utils.chat_backend import ChatBackend, ChatBackendError
 from src.utils.logging import get_logger
-from src.utils.ollama_client import OllamaClient, OllamaError
 
 logger = get_logger(__name__)
 
@@ -94,8 +94,7 @@ def extract_relationships_for_entity(
     entity: Entity,
     mention_context: str,
     candidates: list[Entity],
-    ollama_client: OllamaClient,
-    chat_model: str,
+    chat_backend: ChatBackend,
 ) -> list[tuple[int, str]]:
     """Ask the LLM which of `candidates` the given entity relates to, and how,
     grounded in `mention_context` (see pipeline.mention_context). Matches the
@@ -103,15 +102,15 @@ def extract_relationships_for_entity(
     rather than trusting it to invent ids.
 
     Returns a list of (related_entity_id, description). Never raises
-    OllamaError - a failure here just means no relationships found this pass.
+    ChatBackendError - a failure here just means no relationships found this pass.
     """
     if not candidates or not mention_context.strip():
         return []
 
     messages = _build_messages(entity, mention_context, candidates)
     try:
-        response = ollama_client.chat(chat_model, messages, temperature=0.2)
-    except OllamaError as e:
+        response = chat_backend.chat(messages, temperature=0.2)
+    except ChatBackendError as e:
         logger.warning(
             "Relationship extraction failed for entity %d (%s), skipping: %s",
             entity.id, entity.name, e,
@@ -132,8 +131,7 @@ def extract_relationships_for_document(
     entities: list[Entity],
     entity_store: EntityStore,
     vector_store: VectorStore,
-    ollama_client: OllamaClient,
-    chat_model: str,
+    chat_backend: ChatBackend,
     max_workers: int = MAX_WORKERS,
 ) -> int:
     """Extract and store relationships for a set of entities (typically a
@@ -147,7 +145,7 @@ def extract_relationships_for_document(
 
     Runs one LLM call per entity, concurrently at low worker count (same
     rationale as entity_extractor.py). A single entity's failure doesn't
-    affect the others - each call already catches its own OllamaError.
+    affect the others - each call already catches its own ChatBackendError.
 
     Returns the number of relationships stored.
     """
@@ -161,9 +159,7 @@ def extract_relationships_for_document(
         mention_context = gather_mention_context(mentions, vector_store)
         candidates = [e for e in all_entities if e.id != entity.id]
         candidates = _filter_candidates_by_context(candidates, mention_context)
-        found = extract_relationships_for_entity(
-            entity, mention_context, candidates, ollama_client, chat_model
-        )
+        found = extract_relationships_for_entity(entity, mention_context, candidates, chat_backend)
         return [(entity.id, related_id, description) for related_id, description in found]
 
     with ThreadPoolExecutor(max_workers=min(max_workers, len(entities))) as executor:

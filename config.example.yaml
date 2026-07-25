@@ -90,3 +90,25 @@ controller:
   # environment - locally, the controller doesn't need to be running unless
   # you're testing that section of the admin page.
   port: 8100
+
+# Which backend chat generation (RAG answers, wiki summaries, entity
+# extraction/dedup/relationships) uses - "ollama" (default) keeps everything
+# local, matching today's behavior. "hosted_api" routes chat generation to
+# hosted_llm below instead, for a deployment that doesn't want to pay for a
+# GPU instance just to run a local chat model. Embeddings and the vision
+# model always use Ollama regardless of this setting - only chat generation
+# is affected.
+chat_backend: "ollama"
+
+# Only read when chat_backend is "hosted_api" above.
+# hosted_llm:
+#   provider: "anthropic"
+#   model: "claude-haiku-4-5"
+#   # Get a key at https://console.anthropic.com/settings/keys - like
+#   # admin_password above, this lives only in your local config.yaml
+#   # (gitignored) and must never be committed.
+#   api_key: "changeme"
+#   # Anthropic's Messages API requires an explicit output cap on every
+#   # request, unlike Ollama's optional num_predict - this is that cap for
+#   # any call site that doesn't set its own.
+#   max_tokens: 1024
