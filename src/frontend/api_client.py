@@ -99,6 +99,66 @@ class ApiClient:
     def health(self) -> dict:
         return self._request("GET", "/api/health")
 
+    def _admin_post(self, path: str, admin_password: str, **extra_json) -> dict:
+        try:
+            response = httpx.post(
+                f"{self._base_url}{path}",
+                json={"admin_password": admin_password, **extra_json},
+                timeout=self._timeout,
+            )
+            if response.status_code == 401:
+                raise ApiAuthError(_auth_error_detail(response, "Incorrect admin password"))
+            if response.status_code in (400, 404):
+                raise ApiClientError(response.json().get("detail", "Request failed"))
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"Request to {path} failed: {e}") from e
+        return response.json()
+
+    def _admin_get(self, path: str, admin_password: str, **params) -> dict:
+        try:
+            response = httpx.get(
+                f"{self._base_url}{path}",
+                params={"admin_password": admin_password, **params},
+                timeout=self._timeout,
+            )
+            if response.status_code == 401:
+                raise ApiAuthError(_auth_error_detail(response, "Incorrect admin password"))
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"Request to {path} failed: {e}") from e
+        return response.json()
+
+    def search_entities(self, query: str, admin_password: str) -> list[dict]:
+        return self._admin_get("/api/admin/entities/search", admin_password, query=query)["entities"]
+
+    def scan_for_duplicates(self, admin_password: str) -> list[dict]:
+        return self._admin_post("/api/admin/dedupe/scan", admin_password)["candidates"]
+
+    def list_dedupe_candidates(self, admin_password: str, status: str | None = None) -> list[dict]:
+        params = {"status": status} if status else {}
+        return self._admin_get("/api/admin/dedupe/candidates", admin_password, **params)["candidates"]
+
+    def approve_dedupe_candidate(self, candidate_id: int, admin_password: str) -> dict:
+        return self._admin_post(f"/api/admin/dedupe/candidates/{candidate_id}/approve", admin_password)
+
+    def reject_dedupe_candidate(self, candidate_id: int, admin_password: str) -> dict:
+        return self._admin_post(f"/api/admin/dedupe/candidates/{candidate_id}/reject", admin_password)
+
+    def skip_dedupe_candidate(self, candidate_id: int, admin_password: str) -> dict:
+        return self._admin_post(f"/api/admin/dedupe/candidates/{candidate_id}/skip", admin_password)
+
+    def manual_merge(self, keep_id: int, merge_id: int, admin_password: str) -> dict:
+        return self._admin_post(
+            "/api/admin/merge", admin_password, keep_id=keep_id, merge_id=merge_id
+        )
+
+    def list_undoable_merges(self, admin_password: str) -> list[dict]:
+        return self._admin_get("/api/admin/merges/undoable", admin_password)["merges"]
+
+    def undo_merge(self, entity_id: int, admin_password: str) -> dict:
+        return self._admin_post(f"/api/admin/merges/{entity_id}/undo", admin_password)
+
     def verify_admin_password(self, admin_password: str) -> bool:
         try:
             response = httpx.post(

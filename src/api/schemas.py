@@ -14,6 +14,7 @@ class SourceModel(BaseModel):
     page_start: int
     page_end: int
     score: float
+    source_type: str = "text"
 
 
 class ChatResponseModel(BaseModel):
@@ -67,6 +68,7 @@ class SearchResultModel(BaseModel):
     page_start: int
     page_end: int
     score: float
+    source_type: str = "text"
 
 
 class SearchResponse(BaseModel):
@@ -98,3 +100,69 @@ class AdminQueryResponse(BaseModel):
     columns: list[str]
     rows: list[list]
     rows_affected: int | None = None
+
+
+class EntityRefModel(BaseModel):
+    id: int
+    name: str
+    type: str
+    description: str
+
+
+class DedupeCandidateModel(BaseModel):
+    id: int
+    status: str
+    created_at: str
+    keep: EntityRefModel
+    merge: list[EntityRefModel]
+
+
+class DedupeScanRequest(BaseModel):
+    admin_password: str
+
+
+class EntitySearchResponse(BaseModel):
+    entities: list[EntityRefModel]
+
+
+class DedupeCandidateListResponse(BaseModel):
+    candidates: list[DedupeCandidateModel]
+
+
+class DedupeCandidateActionRequest(BaseModel):
+    admin_password: str
+
+
+class DedupeCandidateActionResponse(BaseModel):
+    id: int
+    status: str
+    detail: str | None = None
+
+
+class ManualMergeRequest(BaseModel):
+    admin_password: str
+    keep_id: int
+    merge_id: int
+
+
+class ManualMergeResponse(BaseModel):
+    keep_id: int
+    merge_id: int
+
+
+class UndoableMergeModel(BaseModel):
+    merged_entity: EntityRefModel
+    keep: EntityRefModel
+
+
+class UndoableMergesResponse(BaseModel):
+    merges: list[UndoableMergeModel]
+
+
+class UndoMergeRequest(BaseModel):
+    admin_password: str
+
+
+class UndoMergeResponse(BaseModel):
+    entity_id: int
+    restored: bool

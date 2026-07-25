@@ -25,6 +25,18 @@ def _doc_with_sections(pages: list[tuple[str, str | None]]) -> ExtractedDocument
     )
 
 
+def _doc_with_source_types(pages: list[tuple[str, str]]) -> ExtractedDocument:
+    return ExtractedDocument(
+        document_id="doc1",
+        title="doc1",
+        source_path="doc1.pdf",
+        pages=[
+            ExtractedPage(page_number=i + 1, text=text, source_type=source_type)
+            for i, (text, source_type) in enumerate(pages)
+        ],
+    )
+
+
 def test_chunk_metadata_complete():
     document = _doc(["Aragorn walked into Bree.\n\nHe met Gandalf there."])
 
@@ -128,3 +140,58 @@ def test_section_boundary_does_not_carry_overlap_across_it():
     assert "second story begins" in first_of_second_story.text
     assert "first story" not in first_of_second_story.text
     assert last_of_first_story.text != first_of_second_story.text
+
+
+def test_chunks_default_to_text_source_type():
+    document = _doc(["A perfectly ordinary paragraph."])
+
+    chunks = chunk_document(document)
+
+    assert all(c.source_type == "text" for c in chunks)
+
+
+def test_chunk_carries_visual_source_type_from_its_page():
+    document = _doc_with_source_types([("A description of a comic panel.", "visual")])
+
+    chunks = chunk_document(document)
+
+    assert len(chunks) == 1
+    assert chunks[0].source_type == "visual"
+
+
+def test_source_type_change_forces_a_hard_break():
+    # Small enough to combine into one chunk by size alone, but one page is
+    # directly-extracted text and the other is a vision description - should
+    # NOT be merged into one chunk.
+    document = _doc_with_source_types(
+        [
+            ("Real extracted prose.", "text"),
+            ("A vision model's description.", "visual"),
+        ]
+    )
+
+    chunks = chunk_document(document, chunk_size=800, chunk_overlap=150)
+
+    assert len(chunks) == 2
+    assert chunks[0].source_type == "text"
+    assert chunks[1].source_type == "visual"
+    assert "vision model" not in chunks[0].text
+    assert "Real extracted" not in chunks[1].text
+
+
+def test_source_type_boundary_does_not_carry_overlap_across_it():
+    long_paragraph = " ".join(f"Sentence number {i} of real prose." for i in range(60))
+    document = _doc_with_source_types(
+        [
+            (long_paragraph, "text"),
+            ("A vision description begins here.", "visual"),
+        ]
+    )
+
+    chunks = chunk_document(document, chunk_size=200, chunk_overlap=50)
+
+    assert len(chunks) >= 2
+    first_visual_chunk = chunks[-1]
+    assert first_visual_chunk.source_type == "visual"
+    assert "vision description begins" in first_visual_chunk.text
+    assert "real prose" not in first_visual_chunk.text

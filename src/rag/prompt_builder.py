@@ -16,7 +16,12 @@ SYSTEM_PROMPT = (
     '2. "Interpretation:" - inference, connections, or reasoning that goes beyond what the '
     "context explicitly says (e.g. inferring a motive, relationship, or significance the text "
     "implies but doesn't state outright). If the answer needs no interpretation beyond the "
-    "documents, omit this section rather than padding it with restated facts."
+    "documents, omit this section rather than padding it with restated facts.\n\n"
+    "Some context blocks are marked [visually described] instead of [Source: ...]. That content "
+    "came from a local vision model's description of an image-heavy page, not directly-extracted "
+    "text - treat it as a rough, potentially imprecise account of what the page shows, never as a "
+    "directly quotable fact. If you use it, it belongs in \"Interpretation:\", clearly hedged (e.g. "
+    "\"the illustration appears to show...\"), not in \"From the documents:\"."
 )
 
 
@@ -27,7 +32,11 @@ def _format_context(chunks: list[SearchResult]) -> str:
             pages = f"p. {chunk.page_start}"
         else:
             pages = f"pp. {chunk.page_start}-{chunk.page_end}"
-        blocks.append(f"[Source: {chunk.document_id}, {pages}]\n{chunk.text}")
+        if chunk.source_type == "visual":
+            label = f"[visually described: {chunk.document_id}, {pages}]"
+        else:
+            label = f"[Source: {chunk.document_id}, {pages}]"
+        blocks.append(f"{label}\n{chunk.text}")
     return "\n\n".join(blocks)
 
 

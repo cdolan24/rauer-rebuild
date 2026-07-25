@@ -16,6 +16,7 @@ class SearchResult:
     page_start: int
     page_end: int
     score: float
+    source_type: str = "text"  # "text" (directly extracted) or "visual" (vision-model description)
 
 
 class VectorStore:
@@ -44,6 +45,7 @@ class VectorStore:
                     "document_id": ec.chunk.document_id,
                     "page_start": ec.chunk.page_start,
                     "page_end": ec.chunk.page_end,
+                    "source_type": ec.chunk.source_type,
                 }
                 for ec in embedded_chunks
             ],
@@ -76,6 +78,9 @@ class VectorStore:
                     page_start=metadata["page_start"],
                     page_end=metadata["page_end"],
                     score=score,
+                    # .get() with a default: chunks stored before this field
+                    # existed won't have it in their metadata.
+                    source_type=metadata.get("source_type", "text"),
                 )
             )
         return results
@@ -94,6 +99,7 @@ class VectorStore:
                 text=text,
                 page_start=metadata["page_start"],
                 page_end=metadata["page_end"],
+                source_type=metadata.get("source_type", "text"),
             )
             for chunk_id, text, metadata in zip(
                 result["ids"], result["documents"], result["metadatas"]

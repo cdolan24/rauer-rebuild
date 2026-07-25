@@ -16,6 +16,7 @@ class Chunk:
     text: str
     page_start: int
     page_end: int
+    source_type: str = "text"  # "text" (directly extracted) or "visual" (vision-model description)
 
 
 @dataclass
@@ -23,10 +24,15 @@ class _Unit:
     page_number: int
     text: str
     section: str | None = None
+    source_type: str = "text"
 
 
 def _split_page_into_units(
-    page_number: int, text: str, max_unit_size: int, section: str | None = None
+    page_number: int,
+    text: str,
+    max_unit_size: int,
+    section: str | None = None,
+    source_type: str = "text",
 ) -> list[_Unit]:
     """Split a page's text into paragraph- or sentence-level units."""
     units: list[_Unit] = []
@@ -35,12 +41,12 @@ def _split_page_into_units(
         if not para:
             continue
         if len(para) <= max_unit_size:
-            units.append(_Unit(page_number, para, section))
+            units.append(_Unit(page_number, para, section, source_type))
             continue
         for sentence in _SENTENCE_RE.split(para):
             sentence = sentence.strip()
             if sentence:
-                units.append(_Unit(page_number, sentence, section))
+                units.append(_Unit(page_number, sentence, section, source_type))
     return units
 
 
@@ -64,11 +70,18 @@ def chunk_document(
     story with the start of the next. Pages with no detected section (most of
     a rules-heavy sourcebook) don't trigger this - chunking falls back to
     size-based splitting exactly as before for that content.
+
+    A page's ``source_type`` (directly-extracted "text" vs. a vision-model
+    "visual" description, see image_extractor.py) is also a hard break for
+    the same reason: a chunk should never blend real prose with a vision
+    model's paraphrase of a different page.
     """
     all_units: list[_Unit] = []
     for page in document.pages:
         all_units.extend(
-            _split_page_into_units(page.page_number, page.text, chunk_size, page.section)
+            _split_page_into_units(
+                page.page_number, page.text, chunk_size, page.section, page.source_type
+            )
         )
 
     if not all_units:
@@ -93,6 +106,9 @@ def chunk_document(
                 text=text,
                 page_start=page_start,
                 page_end=page_end,
+                # All units in `current` share one source_type - the hard
+                # break below never lets them mix.
+                source_type=current[0].source_type,
             )
         )
 
@@ -106,10 +122,12 @@ def chunk_document(
             and unit.section is not None
             and unit.section != current_section
         )
-        if crosses_section:
-            # A detected story/chapter boundary - flush without carrying
-            # overlap forward, so the new chunk doesn't open with trailing
-            # text from the story that just ended.
+        crosses_source_type = current and unit.source_type != current[0].source_type
+        if crosses_section or crosses_source_type:
+            # A detected story/chapter boundary, or a transition between
+            # directly-extracted text and a vision-model description - flush
+            # without carrying overlap forward, so the new chunk doesn't open
+            # with trailing content from the other side of the boundary.
             flush()
             current = []
             current_len = 0

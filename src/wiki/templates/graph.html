@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Relationship Graph - Malifaux Wiki{% endblock %}
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="/wiki">Wiki Home</a> &gt; Relationship Graph</nav>
+{% endblock %}
+{% block content %}
+<h1>Relationship Graph</h1>
+<p class="graph-hint">Search for an entity to see what it connects to. Click a node to jump to its own neighborhood; click a label to open that entity's wiki page.</p>
+<input type="text" id="graph-search" placeholder="Search entities by name..." autocomplete="off">
+<ul id="graph-search-results" class="graph-search-results"></ul>
+<p id="graph-empty" class="graph-empty">Nothing loaded yet - search above for an entity.</p>
+<svg viewBox="0 0 600 600" class="graph-svg" id="graph-svg" style="display: none;">
+    <g id="graph-edges"></g>
+    <g id="graph-nodes"></g>
+</svg>
+<div id="graph-tooltip" class="graph-tooltip" style="display: none;"></div>
+<script>
+(function () {
+    var svg = document.getElementById('graph-svg');
+    var edgesGroup = document.getElementById('graph-edges');
+    var nodesGroup = document.getElementById('graph-nodes');
+    var searchBox = document.getElementById('graph-search');
+    var resultsList = document.getElementById('graph-search-results');
+    var emptyMessage = document.getElementById('graph-empty');
+    var tooltip = document.getElementById('graph-tooltip');
+    var tooltipHideTimer = null;
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+
+    // Hover preview: shows the entity's name/type and a link to its wiki
+    // page without leaving the graph, so seeing that page doesn't require
+    // clicking a node (which instead reloads that node's own neighborhood).
+    function showTooltip(node, clientX, clientY) {
+        clearTimeout(tooltipHideTimer);
+        var typeLabel = node.type ? ' <span class="graph-tooltip-type">(' + node.type + ')</span>' : '';
+        tooltip.innerHTML = '<strong>' + node.name + '</strong>' + typeLabel +
+            '<br><a href="/wiki/entity/' + node.id + '">View wiki page &rarr;</a>';
+        tooltip.style.left = (clientX + 12) + 'px';
+        tooltip.style.top = (clientY + 12) + 'px';
+        tooltip.style.display = 'block';
+    }
+
+    function scheduleHideTooltip() {
+        tooltipHideTimer = setTimeout(function () { tooltip.style.display = 'none'; }, 200);
+    }
+
+    tooltip.addEventListener('pointerenter', function () { clearTimeout(tooltipHideTimer); });
+    tooltip.addEventListener('pointerleave', scheduleHideTooltip);
+
+    function clearResults() {
+        resultsList.innerHTML = '';
+    }
+
+    function setEl(tag, attrs) {
+        var el = document.createElementNS(SVG_NS, tag);
+        Object.keys(attrs).forEach(function (key) { el.setAttribute(key, attrs[key]); });
+        return el;
+    }
+
+    // Replaces whatever neighborhood is currently drawn with a new one -
+    // matches "what does X connect to" as a fresh question each time,
+    // instead of accumulating an ever-larger merged set (see design.md).
+    function draw(data) {
+        edgesGroup.innerHTML = '';
+        nodesGroup.innerHTML = '';
+
+        data.edges.forEach(function (edge) {
+            edgesGroup.appendChild(setEl('line', {
+                x1: edge.x1, y1: edge.y1, x2: edge.x2, y2: edge.y2,
+                class: 'graph-edge',
+                'data-source': edge.source_id,
+                'data-target': edge.target_id,
+            }));
+        });
+
+        data.nodes.forEach(function (node) {
+            var group = setEl('g', { class: 'graph-node-group', 'data-id': node.id, 'data-name': node.name.toLowerCase() });
+            var circle = setEl('circle', { cx: node.x, cy: node.y, r: 8, class: 'graph-node' });
+            var link = document.createElementNS(SVG_NS, 'a');
+            link.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '/wiki/entity/' + node.id);
+            link.setAttribute('href', '/wiki/entity/' + node.id);
+            var text = setEl('text', { x: node.x, y: node.y - 12, 'text-anchor': 'middle', class: 'graph-label' });
+            text.textContent = node.name;
+            link.appendChild(text);
+
+            circle.addEventListener('click', function () { loadNeighborhood(node.id); });
+            circle.addEventListener('pointerenter', function (e) { showTooltip(node, e.clientX, e.clientY); });
+            circle.addEventListener('pointerleave', scheduleHideTooltip);
+            group.appendChild(circle);
+            group.appendChild(link);
+            nodesGroup.appendChild(group);
+        });
+
+        svg.style.display = data.nodes.length ? '' : 'none';
+        emptyMessage.style.display = data.nodes.length ? 'none' : '';
+        resetViewBox();
+    }
+
+    function loadNeighborhood(entityId) {
+        fetch('/wiki/graph/data?entity_id=' + encodeURIComponent(entityId))
+            .then(function (response) { return response.ok ? response.json() : null; })
+            .then(function (data) { if (data) { draw(data); } });
+    }
+
+    var searchDebounce = null;
+    searchBox.addEventListener('input', function () {
+        var query = searchBox.value.trim();
+        clearTimeout(searchDebounce);
+        if (!query) {
+            clearResults();
+            return;
+        }
+        searchDebounce = setTimeout(function () {
+            fetch('/wiki/graph/search?q=' + encodeURIComponent(query))
+                .then(function (response) { return response.ok ? response.json() : []; })
+                .then(function (matches) {
+                    clearResults();
+                    if (matches.length === 1) {
+                        loadNeighborhood(matches[0].id);
+                        return;
+                    }
+                    matches.forEach(function (match) {
+                        var li = document.createElement('li');
+                        li.textContent = match.name;
+                        li.addEventListener('click', function () {
+                            clearResults();
+                            searchBox.value = match.name;
+                            loadNeighborhood(match.id);
+                        });
+                        resultsList.appendChild(li);
+                    });
+                });
+        }, 150);
+    });
+
+    // Pan (pointer drag) and zoom (wheel) via viewBox - unchanged from the
+    // full-graph version, just now applied to whatever small neighborhood
+    // is currently drawn.
+    var viewBox = { x: 0, y: 0, w: 600, h: 600 };
+    function applyViewBox() {
+        svg.setAttribute('viewBox', viewBox.x + ' ' + viewBox.y + ' ' + viewBox.w + ' ' + viewBox.h);
+    }
+    function resetViewBox() {
+        viewBox = { x: 0, y: 0, w: 600, h: 600 };
+        applyViewBox();
+    }
+
+    svg.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        var point = clientToSvg(e.clientX, e.clientY);
+        var scale = e.deltaY > 0 ? 1.1 : 0.9;
+        var newW = Math.max(60, Math.min(2400, viewBox.w * scale));
+        var newH = Math.max(60, Math.min(2400, viewBox.h * scale));
+        viewBox.x = point.x - (point.x - viewBox.x) * (newW / viewBox.w);
+        viewBox.y = point.y - (point.y - viewBox.y) * (newH / viewBox.h);
+        viewBox.w = newW;
+        viewBox.h = newH;
+        applyViewBox();
+    }, { passive: false });
+
+    function clientToSvg(clientX, clientY) {
+        var pt = svg.createSVGPoint();
+        pt.x = clientX;
+        pt.y = clientY;
+        var ctm = svg.getScreenCTM();
+        return ctm ? pt.matrixTransform(ctm.inverse()) : { x: clientX, y: clientY };
+    }
+
+    var dragging = false;
+    var lastPoint = null;
+
+    svg.addEventListener('pointerdown', function (e) {
+        // Capturing the pointer retargets the resulting click event to the
+        // svg itself, which would swallow node/label clicks - only start a
+        // drag when the pointerdown didn't land on a node.
+        if (e.target.closest('.graph-node-group')) {
+            return;
+        }
+        dragging = true;
+        lastPoint = clientToSvg(e.clientX, e.clientY);
+        svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove', function (e) {
+        if (!dragging) {
+            return;
+        }
+        var point = clientToSvg(e.clientX, e.clientY);
+        viewBox.x -= (point.x - lastPoint.x);
+        viewBox.y -= (point.y - lastPoint.y);
+        applyViewBox();
+        lastPoint = clientToSvg(e.clientX, e.clientY);
+    });
+    svg.addEventListener('pointerup', function () { dragging = false; });
+    svg.addEventListener('pointerleave', function () { dragging = false; });
+
+    // A ?focus=<entity_id> deep link (e.g. from an entity's wiki page)
+    // auto-loads that entity's neighborhood on arrival.
+    var params = new URLSearchParams(window.location.search);
+    var focusId = params.get('focus');
+    if (focusId) {
+        loadNeighborhood(focusId);
+    }
+})();
+</script>
+{% endblock %}

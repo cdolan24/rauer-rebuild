@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Locations - Malifaux Wiki{% endblock %}
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="/wiki">Wiki Home</a> &gt; Locations</nav>
+{% endblock %}
+{% block content %}
+<h1>Locations</h1>
+<p>A map-style index of every location mentioned across the source material.</p>
+<ul class="entity-grid">
+    {% for entity in entities %}
+    <li><a class="wiki-btn type-location" href="/wiki/entity/{{ entity.id }}">{{ entity.name }}</a></li>
+    {% else %}
+    <li>No locations found.</li>
+    {% endfor %}
+</ul>
+{% endblock %}

@@ -46,6 +46,7 @@ def chat(payload: ChatRequest, request: Request) -> ChatResponseModel:
                 page_start=c.page_start,
                 page_end=c.page_end,
                 score=c.score,
+                source_type=c.source_type,
             )
             for c in result.citations
         ],
@@ -75,6 +76,7 @@ def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
                                     "page_start": c.page_start,
                                     "page_end": c.page_end,
                                     "score": c.score,
+                                    "source_type": c.source_type,
                                 }
                                 for c in item.citations
                             ],

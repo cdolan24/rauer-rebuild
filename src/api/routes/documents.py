@@ -121,6 +121,7 @@ async def upload_document(
         config.paths.processed_dir,
         entity_store=entity_store,
         chat_model=config.ollama.chat_model,
+        vision_model=config.ollama.vision_model,
     )
 
     return UploadResponse(document_id=document_id, status="pending")

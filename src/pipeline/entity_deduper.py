@@ -11,7 +11,10 @@ from src.utils.ollama_client import OllamaClient, OllamaError
 
 logger = get_logger(__name__)
 
-MAX_WORKERS = 8  # concurrent LLM calls - same pattern as entity_extractor.py
+# See entity_extractor.py's MAX_WORKERS comment: a wide worker count just
+# queues requests behind each other once Ollama is serializing inference
+# anyway, and each queued request's timeout clock runs the whole time it waits.
+MAX_WORKERS = 3
 
 # A candidate pair needs at least this much name similarity to be worth
 # asking the model about at all - keeps the LLM from being asked about
