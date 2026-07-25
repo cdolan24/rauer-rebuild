@@ -536,11 +536,29 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
 
         with gr.Group(visible=False) as upload_group:
             gr.Markdown("### Upload New PDFs")
+            with gr.Accordion("ℹ️ Guide", open=False):
+                gr.Markdown(
+                    "Upload a Malifaux story PDF to add it to the wiki and chat knowledge base. "
+                    "Ingestion (text extraction, chunking, embeddings, entity extraction, wiki "
+                    "summaries/relationships) runs in the background after upload and can take a "
+                    "while - longer for large documents, and much longer if the chat backend is "
+                    "local Ollama on CPU-only hardware rather than a hosted API. Check the chat "
+                    "page's document list or the wiki to see when it's finished."
+                )
             upload_file = gr.File(label="PDF file", file_types=[".pdf"])
             upload_status = gr.Markdown("")
 
         with gr.Group(visible=False) as db_browser_group:
             gr.Markdown("### Database Browser")
+            with gr.Accordion("ℹ️ Guide", open=False):
+                gr.Markdown(
+                    "Run arbitrary SQL directly against the application's SQLite database. "
+                    "There is no confirmation and no undo - a `DELETE` or `DROP` runs immediately "
+                    "and permanently. This is the same trust boundary as the admin password "
+                    "itself: anyone who can unlock this page can do anything a database shell "
+                    "could do. Use `SELECT` queries to inspect data; only run destructive "
+                    "statements if you're certain."
+                )
             sql_box = gr.Textbox(
                 label="SQL query", placeholder="SELECT * FROM entities LIMIT 10", lines=3
             )
@@ -550,6 +568,14 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
 
         with gr.Group(visible=False) as service_control_group:
             gr.Markdown("### Service Control")
+            with gr.Accordion("ℹ️ Guide", open=False):
+                gr.Markdown(
+                    "Start, stop, or restart the backend or frontend service without shell "
+                    "access to the host. Restarting the backend is also how changes made in the "
+                    "Chat Backend section below actually take effect - saving there only writes "
+                    "config.yaml, it doesn't restart anything itself. Restarting the frontend "
+                    "will briefly interrupt this admin page too."
+                )
             service_status_text = gr.Markdown("")
             refresh_status_btn = gr.Button("Refresh status")
             with gr.Row():
@@ -566,14 +592,24 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
 
         with gr.Group(visible=False) as backend_config_group:
             gr.Markdown("### Chat Backend")
-            gr.Markdown(
-                "Which backend chat generation (RAG answers, wiki summaries, entity extraction) "
-                "uses. Embeddings always run on local Ollama regardless of this setting. Saving "
-                "writes the choice to config.yaml - it only takes effect after a backend restart "
-                "(use the Service Control section above)."
-            )
+            with gr.Accordion("ℹ️ Guide", open=False):
+                gr.Markdown(
+                    "Choose which backend generates chat text (RAG answers, wiki summaries, "
+                    "entity extraction/relationships) - local Ollama or a hosted API. Embeddings "
+                    "and the optional vision model always stay on local Ollama regardless of "
+                    "this setting. GPU detection here is informational only: it's a hint for "
+                    "whether local Ollama chat generation will be fast enough, not a hard "
+                    "restriction. Saving writes your choice to config.yaml, but does **not** "
+                    "apply it - use Service Control above to restart the backend afterward. Once "
+                    "a hosted API key is saved it's never shown again (only whether one is "
+                    "configured); leave the key field blank to keep whatever is already set."
+                )
+
+            gr.Markdown("#### Current Status")
             backend_gpu_status = gr.Markdown("")
             backend_status = gr.Markdown("")
+
+            gr.Markdown("#### Update Backend")
             backend_radio = gr.Radio(["ollama", "hosted_api"], label="Chat backend", value="ollama")
             with gr.Row():
                 backend_model_box = gr.Textbox(label="Hosted model", value="claude-haiku-4-5")
@@ -582,7 +618,7 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                 label="Hosted API key (leave blank to keep the currently configured one)",
                 type="password",
             )
-            save_backend_btn = gr.Button("Save backend config")
+            save_backend_btn = gr.Button("Save backend config", variant="primary")
             save_backend_status = gr.Markdown("")
 
         dedupe_candidates_state = gr.State([])
@@ -590,6 +626,19 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
 
         with gr.Group(visible=False) as merge_review_group:
             gr.Markdown("### Entity Merge Review")
+            with gr.Accordion("ℹ️ Guide", open=False):
+                gr.Markdown(
+                    "Review and merge duplicate entities (the same character/place under "
+                    "different name variants). **Automated Duplicate Scan** runs an LLM pass "
+                    "over all entities in the background - click 'Scan for duplicates', then "
+                    "'Check scan results' once it's had time to finish (this can take a while, "
+                    "especially on local Ollama). Review each candidate one at a time: Approve "
+                    "merges it, Reject marks it not a duplicate, Skip leaves it for later. "
+                    "**Manual Merge** lets you merge two specific entities you search for "
+                    "directly, bypassing the scan. Any merge (automated or manual) can be "
+                    "reversed from **Undo a Merge**, as long as neither side has been merged "
+                    "again since."
+                )
 
             gr.Markdown("#### Automated Duplicate Scan")
             with gr.Row():
