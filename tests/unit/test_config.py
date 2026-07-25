@@ -208,3 +208,19 @@ def test_hosted_llm_can_be_configured(tmp_path):
     assert config.hosted_llm.model == "claude-opus-4-8"
     assert config.hosted_llm.api_key == "sk-real-key"
     assert config.hosted_llm.max_tokens == 2048
+
+
+@pytest.mark.parametrize("placeholder", ["changeme", ""])
+def test_hosted_llm_api_key_treats_placeholders_as_unset(tmp_path, placeholder):
+    """build_chat_backend's fail-fast check for chat_backend: hosted_api
+    relies on an unconfigured api_key resolving to None, not the literal
+    "changeme" string config_writer.py writes back when an admin switches
+    backends via the admin panel without entering a real key yet."""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        _BASE_CONFIG + f'\nhosted_llm:\n  api_key: "{placeholder}"\n', encoding="utf-8"
+    )
+
+    config = load_config(config_path)
+
+    assert config.hosted_llm.api_key is None

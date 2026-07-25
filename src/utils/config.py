@@ -163,7 +163,7 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         log_level=raw.get("logging", {}).get("level", "INFO"),
         rag_min_score=float(raw.get("rag", {}).get("min_score", 0.55)),
         rag_max_history_turns=int(raw.get("rag", {}).get("max_history_turns", 3)),
-        admin_password=_resolve_admin_password(raw.get("auth", {}).get("admin_password")),
+        admin_password=_resolve_secret(raw.get("auth", {}).get("admin_password")),
         controller_port=int(raw.get("controller", {}).get("port", 8100)),
         controller_url=raw.get("controller", {}).get("url")
         or f"http://127.0.0.1:{int(raw.get('controller', {}).get('port', 8100))}",
@@ -171,19 +171,23 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         hosted_llm=HostedLlmConfig(
             provider=raw.get("hosted_llm", {}).get("provider", "anthropic"),
             model=raw.get("hosted_llm", {}).get("model", "claude-haiku-4-5"),
-            api_key=raw.get("hosted_llm", {}).get("api_key") or None,
+            api_key=_resolve_secret(raw.get("hosted_llm", {}).get("api_key")),
             max_tokens=int(raw.get("hosted_llm", {}).get("max_tokens", 1024)),
         ),
     )
 
 
-_UNSET_ADMIN_PASSWORD_PLACEHOLDERS = {None, "", "changeme"}
+_UNSET_SECRET_PLACEHOLDERS = {None, "", "changeme"}
 
 
-def _resolve_admin_password(value: str | None) -> str | None:
-    """Treat a missing/empty/placeholder password as "no password configured"
-    so a forgotten config doesn't silently leave uploads open."""
-    return None if value in _UNSET_ADMIN_PASSWORD_PLACEHOLDERS else value
+def _resolve_secret(value: str | None) -> str | None:
+    """Treat a missing/empty/placeholder secret as "not configured" - used
+    for both `admin_password` (a forgotten config shouldn't silently leave
+    uploads open) and `hosted_llm.api_key` (config_writer.py writes back the
+    same "changeme" placeholder when no real key has been entered yet, and
+    build_chat_backend's fail-fast check needs to see that as unset, not as
+    a truthy-but-bogus key)."""
+    return None if value in _UNSET_SECRET_PLACEHOLDERS else value
 
 
 def get_config_path() -> str:

@@ -57,20 +57,28 @@ and browse sources. API docs are available at `http://localhost:8000/docs`.
 
 ## Deployment
 
-`deploy/setup_ec2.sh` provisions a single host (systemd + Nginx, no containers - see
-`openspec/specs/deployment/`) under one of two profiles, selected via `DEPLOY_PROFILE`:
+`deploy/setup_ec2.sh` (AWS) and `deploy/setup_azure_vm.sh` (Azure) each provision a
+single host (systemd + Nginx, no containers - see `openspec/specs/deployment/`) under
+one of two profiles, selected via `DEPLOY_PROFILE`. See `deploy/README.md` for full
+setup instructions on either cloud.
 
-| Profile | Instance | Chat generation | Embeddings | When to use |
+| Profile | AWS instance / Azure VM size | Chat generation | Embeddings | When to use |
 |---|---|---|---|---|
-| `gpu-inhouse` (default) | GPU-backed, e.g. `g4dn.xlarge` | Local Ollama (`llama3.2`) | Local Ollama | Hardware you already own - fully local, no cloud LLM calls |
-| `cpu-hosted-api` | Small CPU-only, e.g. `t3.small` | Hosted API (`hosted_llm` in `config.yaml`, default Anthropic's `claude-haiku-4-5`) | Local Ollama | Cost-optimized AWS - a GPU instance running 24/7 just to serve chat generation costs far more than a hosted API does for typical usage of this app |
+| `gpu-inhouse` (default) | GPU-backed, e.g. `g4dn.xlarge` / `Standard_NC4as_T4_v3` | Local Ollama (`llama3.2`) | Local Ollama | Hardware you already own - fully local, no cloud LLM calls |
+| `cpu-hosted-api` | Small CPU-only, e.g. `t3.small` / `Standard_B2s` | Hosted API (`hosted_llm` in `config.yaml`, default Anthropic's `claude-haiku-4-5`) | Local Ollama | Cost-optimized - a GPU instance running 24/7 just to serve chat generation costs far more than a hosted API does for typical usage of this app |
 
 ```bash
-# In-house / GPU (default)
+# In-house / GPU (default) - AWS
 sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./deploy/setup_ec2.sh
 
-# Cost-optimized AWS, no GPU
+# Cost-optimized, no GPU - AWS
 sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git DEPLOY_PROFILE=cpu-hosted-api ./deploy/setup_ec2.sh
+
+# In-house / GPU (default) - Azure
+sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./deploy/setup_azure_vm.sh
+
+# Cost-optimized, no GPU - Azure
+sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git DEPLOY_PROFILE=cpu-hosted-api ./deploy/setup_azure_vm.sh
 ```
 
 Under `cpu-hosted-api`, set a real `hosted_llm.api_key` in `config.yaml` before starting

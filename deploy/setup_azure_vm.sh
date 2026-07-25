@@ -1,22 +1,24 @@
 #!/bin/bash
-# Buddharauer EC2 setup script. Run as root on a fresh Ubuntu 22.04 instance.
+# Buddharauer Azure VM setup script. Run as root on a fresh Ubuntu 22.04 VM.
 #
 # Two deployment profiles, selected via DEPLOY_PROFILE:
 #   gpu-inhouse    (default) - today's behavior: Ollama runs both chat
-#                  generation and embeddings locally. Needs a GPU-backed
-#                  instance (e.g. g4dn.xlarge) - see README.md for why GPU
-#                  matters here. Use this for hardware you already own.
+#                  generation and embeddings locally. Needs a GPU-backed VM
+#                  size (e.g. an NC-family, T4-class size such as
+#                  Standard_NC4as_T4_v3) - see README.md for why GPU matters
+#                  here. Use this for hardware you already own/have quota for.
 #   cpu-hosted-api - no GPU needed: chat generation routes to a hosted API
 #                  (config.yaml's hosted_llm section), Ollama only runs
-#                  embeddings on a small CPU instance (e.g. t3.small). Cost-
-#                  optimized for AWS - see openspec/specs/deployment/.
+#                  embeddings on a small CPU size (e.g. Standard_B2s). Cost-
+#                  optimized - see openspec/specs/deployment/.
 #
-# This script has not been run against a real AWS instance from this
-# development environment (no AWS access here) - review each step before
-# running it against a real server.
+# This script has not been run against a real Azure subscription from this
+# development environment (no Azure credentials here) - review each step
+# before running it against a real VM. See deploy/README.md for the
+# az vm create / NSG prerequisites this script assumes are already done.
 #
-# Usage: sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./setup_ec2.sh
-# Usage (cost-optimized AWS profile): sudo BUDDHARAUER_REPO_URL=... DEPLOY_PROFILE=cpu-hosted-api ./setup_ec2.sh
+# Usage: sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./setup_azure_vm.sh
+# Usage (cost-optimized profile): sudo BUDDHARAUER_REPO_URL=... DEPLOY_PROFILE=cpu-hosted-api ./setup_azure_vm.sh
 set -euo pipefail
 
 APP_DIR=/opt/buddharauer
@@ -40,8 +42,9 @@ apt-get install -y python3 python3-venv nginx certbot python3-certbot-nginx git 
 
 if [ "$DEPLOY_PROFILE" = "gpu-inhouse" ]; then
     echo "==> Installing NVIDIA driver (if not already present)"
-    # If you launched from a "Deep Learning AMI" the driver is already installed
-    # and this block is a no-op.
+    # If you launched from an Azure Data Science VM or another GPU-ready
+    # marketplace image, the driver may already be installed and this block
+    # is a no-op.
     if ! command -v nvidia-smi &> /dev/null; then
         apt-get install -y ubuntu-drivers-common
         ubuntu-drivers autoinstall
@@ -148,7 +151,7 @@ fi
 cat <<EOF
   2. Edit /etc/nginx/sites-available/buddharauer - set server_name to your
      actual domain.
-  3. Point your domain's DNS at this instance, then get a TLS cert:
+  3. Point your domain's DNS at this VM's public IP, then get a TLS cert:
        certbot --nginx -d your-domain.example.com
   4. Start everything:
        systemctl start buddharauer-backend buddharauer-frontend buddharauer-controller nginx

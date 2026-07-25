@@ -11,6 +11,7 @@ data_storage/
 processed/
 .coverage
 htmlcov/
+logs/
 
 .claude/settings.local.json
 .claude/scheduled_tasks.lock

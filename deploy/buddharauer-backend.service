@@ -1,6 +1,12 @@
 [Unit]
 Description=Buddharauer FastAPI backend
-After=network.target
+# Every profile uses Ollama for embeddings (gpu-inhouse also uses it for
+# chat) - soft-ordered after it so a fresh boot doesn't serve degraded
+# requests during Ollama's own startup. Not a hard Requires=: the backend
+# itself doesn't crash-loop if Ollama is briefly unreachable (see
+# GET /api/health), so this is an ordering hint, not a strict dependency.
+After=network.target ollama.service
+Wants=ollama.service
 
 [Service]
 Type=simple

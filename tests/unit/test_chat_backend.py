@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import anthropic
+import httpx
 import pytest
 
 from src.utils.chat_backend import (
@@ -153,6 +154,40 @@ def test_anthropic_chat_backend_wraps_sdk_errors():
 
     with pytest.raises(ChatBackendError):
         backend.chat([{"role": "user", "content": "hi"}])
+
+
+def test_anthropic_chat_backend_is_healthy_when_model_lookup_succeeds():
+    backend = AnthropicChatBackend(api_key="sk-test", model="claude-haiku-4-5", default_max_tokens=1024)
+    backend._client = MagicMock()
+    backend._client.models.retrieve.return_value = MagicMock()
+
+    healthy, label = backend.is_healthy()
+
+    assert healthy is True
+    assert label == "hosted_api"
+    backend._client.models.retrieve.assert_called_once_with("claude-haiku-4-5")
+
+
+def test_anthropic_chat_backend_is_unhealthy_on_api_error():
+    backend = AnthropicChatBackend(api_key="sk-test", model="claude-haiku-4-5", default_max_tokens=1024)
+    backend._client = MagicMock()
+    backend._client.models.retrieve.side_effect = anthropic.APIConnectionError(request=MagicMock())
+
+    healthy, label = backend.is_healthy()
+
+    assert healthy is False
+    assert label == "hosted_api"
+
+
+def test_anthropic_chat_backend_is_unhealthy_on_httpx_error():
+    backend = AnthropicChatBackend(api_key="sk-test", model="claude-haiku-4-5", default_max_tokens=1024)
+    backend._client = MagicMock()
+    backend._client.models.retrieve.side_effect = httpx.ConnectError("connection refused")
+
+    healthy, label = backend.is_healthy()
+
+    assert healthy is False
+    assert label == "hosted_api"
 
 
 def test_build_chat_backend_selects_ollama_by_default():

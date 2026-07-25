@@ -319,6 +319,34 @@ def test_repeated_wrong_passwords_lock_out_even_the_correct_password(api_client)
     assert "Too many failed attempts" in response.json()["detail"]
 
 
+def test_lockout_is_keyed_by_forwarded_client_ip_not_the_proxy(api_client):
+    """Behind the shipped Nginx reverse proxy, every request's raw ASGI peer
+    is Nginx itself (127.0.0.1), not the real visitor - rate limiting must
+    key off X-Forwarded-For instead, or one attacker's lockout would also
+    lock out every other real client sharing that same peer address."""
+    for _ in range(5):
+        api_client.post(
+            "/api/auth/verify",
+            json={"admin_password": "not-the-right-password"},
+            headers={"X-Forwarded-For": "203.0.113.5"},
+        )
+
+    locked_out_response = api_client.post(
+        "/api/auth/verify",
+        json={"admin_password": TEST_ADMIN_PASSWORD},
+        headers={"X-Forwarded-For": "203.0.113.5"},
+    )
+    assert locked_out_response.status_code == 401
+    assert "Too many failed attempts" in locked_out_response.json()["detail"]
+
+    other_client_response = api_client.post(
+        "/api/auth/verify",
+        json={"admin_password": TEST_ADMIN_PASSWORD},
+        headers={"X-Forwarded-For": "203.0.113.9"},
+    )
+    assert other_client_response.status_code == 200
+
+
 def test_admin_query_runs_select_with_correct_password(api_client):
     _seed_document(api_client)
 

@@ -46,6 +46,10 @@ Every admin-password-gated endpoint (auth verification, database queries, PDF up
 - **WHEN** a client submits the correct admin password on a fresh (non-locked-out) attempt
 - **THEN** that attempt does not count toward the failed-attempt threshold
 
+#### Scenario: Distinct clients reaching the app through the required reverse proxy are rate-limited independently
+- **WHEN** two different real clients each submit repeated wrong admin passwords through the app's mandatory reverse-proxy front end (see `deployment`'s network-exposure requirement), where every request's raw connection source is the proxy itself rather than the original client
+- **THEN** each client's lockout state is tracked using the client address the proxy forwards, not the proxy's own address, so one client's lockout does not also lock out the other
+
 ### Requirement: Chat Backend Configuration
 An authenticated admin SHALL be able to view the currently configured chat backend (Ollama or hosted API), whether a hosted API key is currently set, and whether a GPU is detected on the host, and SHALL be able to submit a new chat backend choice (and, for the hosted option, a model name and/or API key) that is written to the application config file.
 

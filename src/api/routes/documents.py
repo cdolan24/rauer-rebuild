@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 from src.api.schemas import DocumentContentResponse, DocumentListResponse, DocumentSummary, UploadResponse
 from src.pipeline.ingest import ingest_pdf
-from src.utils.auth import check_admin_password
+from src.utils.auth import check_admin_password, get_client_ip
 
 router = APIRouter(tags=["documents"])
 
@@ -92,7 +92,7 @@ async def upload_document(
 ) -> UploadResponse:
     config = request.app.state.config
     check_admin_password(
-        request.app.state.admin_rate_limiter, request.client.host, config.admin_password, admin_password
+        request.app.state.admin_rate_limiter, get_client_ip(request), config.admin_password, admin_password
     )
 
     registry = request.app.state.registry

@@ -28,7 +28,7 @@ from src.api.schemas import (
 )
 from src.database.entity_store import Entity
 from src.pipeline.entity_deduper import find_duplicate_groups
-from src.utils.auth import check_admin_password
+from src.utils.auth import check_admin_password, get_client_ip
 from src.utils.config import get_config_path, load_config
 from src.utils.config_writer import update_chat_backend_config
 from src.utils.gpu_detect import detect_gpu
@@ -43,7 +43,7 @@ def _entity_ref(entity: Entity) -> EntityRefModel:
 def _check_admin(request: Request, admin_password: str) -> None:
     config = request.app.state.config
     check_admin_password(
-        request.app.state.admin_rate_limiter, request.client.host, config.admin_password, admin_password
+        request.app.state.admin_rate_limiter, get_client_ip(request), config.admin_password, admin_password
     )
 
 
