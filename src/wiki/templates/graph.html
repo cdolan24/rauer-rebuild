@@ -5,94 +5,118 @@
 {% endblock %}
 {% block content %}
 <h1>Relationship Graph</h1>
-{% if nodes %}
-<input type="text" id="graph-search" placeholder="Search entities by name...">
-<svg viewBox="0 0 600 600" class="graph-svg" id="graph-svg">
-    <g id="graph-edges">
-    {% for edge in edges %}
-    <line x1="{{ edge.x1 }}" y1="{{ edge.y1 }}" x2="{{ edge.x2 }}" y2="{{ edge.y2 }}"
-          class="graph-edge" data-source="{{ edge.source_id }}" data-target="{{ edge.target_id }}" />
-    {% endfor %}
-    </g>
-    <g id="graph-nodes">
-    {% for node in nodes %}
-    <g class="graph-node-group" data-id="{{ node.id }}" data-name="{{ node.name|lower }}">
-        <circle cx="{{ node.x }}" cy="{{ node.y }}" r="8" class="graph-node" />
-        <a href="/wiki/entity/{{ node.id }}">
-            <text x="{{ node.x }}" y="{{ node.y - 12 }}" text-anchor="middle" class="graph-label">{{ node.name }}</text>
-        </a>
-    </g>
-    {% endfor %}
-    </g>
+<p class="graph-hint">Search for an entity to see what it connects to. Click a node to jump to its own neighborhood; click a label to open that entity's wiki page.</p>
+<input type="text" id="graph-search" placeholder="Search entities by name..." autocomplete="off">
+<ul id="graph-search-results" class="graph-search-results"></ul>
+<p id="graph-empty" class="graph-empty">Nothing loaded yet - search above for an entity.</p>
+<svg viewBox="0 0 600 600" class="graph-svg" id="graph-svg" style="display: none;">
+    <g id="graph-edges"></g>
+    <g id="graph-nodes"></g>
 </svg>
-<script type="application/json" id="graph-data">{{ {"nodes": nodes, "edges": edges}|tojson }}</script>
 <script>
 (function () {
-    var data = JSON.parse(document.getElementById('graph-data').textContent);
     var svg = document.getElementById('graph-svg');
+    var edgesGroup = document.getElementById('graph-edges');
+    var nodesGroup = document.getElementById('graph-nodes');
     var searchBox = document.getElementById('graph-search');
+    var resultsList = document.getElementById('graph-search-results');
+    var emptyMessage = document.getElementById('graph-empty');
+    var SVG_NS = 'http://www.w3.org/2000/svg';
 
-    var adjacency = {};
-    data.nodes.forEach(function (n) { adjacency[n.id] = new Set(); });
-    data.edges.forEach(function (e) {
-        adjacency[e.source_id].add(e.target_id);
-        adjacency[e.target_id].add(e.source_id);
-    });
-
-    var focusedId = null;
-
-    function clearFocus() {
-        focusedId = null;
-        svg.querySelectorAll('.graph-node-group').forEach(function (g) {
-            g.classList.remove('graph-dim', 'graph-highlight');
-        });
-        svg.querySelectorAll('.graph-edge').forEach(function (e) {
-            e.classList.remove('graph-dim');
-        });
+    function clearResults() {
+        resultsList.innerHTML = '';
     }
 
-    function setFocus(nodeId) {
-        if (focusedId === nodeId) {
-            clearFocus();
-            return;
-        }
-        focusedId = nodeId;
-        var neighbors = adjacency[nodeId] || new Set();
-        svg.querySelectorAll('.graph-node-group').forEach(function (g) {
-            var id = Number(g.dataset.id);
-            var active = id === nodeId || neighbors.has(id);
-            g.classList.toggle('graph-dim', !active);
-            g.classList.toggle('graph-highlight', id === nodeId);
-        });
-        svg.querySelectorAll('.graph-edge').forEach(function (e) {
-            var active = Number(e.dataset.source) === nodeId || Number(e.dataset.target) === nodeId;
-            e.classList.toggle('graph-dim', !active);
-        });
+    function setEl(tag, attrs) {
+        var el = document.createElementNS(SVG_NS, tag);
+        Object.keys(attrs).forEach(function (key) { el.setAttribute(key, attrs[key]); });
+        return el;
     }
 
-    svg.querySelectorAll('.graph-node-group').forEach(function (g) {
-        g.querySelector('.graph-node').addEventListener('click', function () {
-            setFocus(Number(g.dataset.id));
-        });
-    });
+    // Replaces whatever neighborhood is currently drawn with a new one -
+    // matches "what does X connect to" as a fresh question each time,
+    // instead of accumulating an ever-larger merged set (see design.md).
+    function draw(data) {
+        edgesGroup.innerHTML = '';
+        nodesGroup.innerHTML = '';
 
+        data.edges.forEach(function (edge) {
+            edgesGroup.appendChild(setEl('line', {
+                x1: edge.x1, y1: edge.y1, x2: edge.x2, y2: edge.y2,
+                class: 'graph-edge',
+                'data-source': edge.source_id,
+                'data-target': edge.target_id,
+            }));
+        });
+
+        data.nodes.forEach(function (node) {
+            var group = setEl('g', { class: 'graph-node-group', 'data-id': node.id, 'data-name': node.name.toLowerCase() });
+            var circle = setEl('circle', { cx: node.x, cy: node.y, r: 8, class: 'graph-node' });
+            var link = document.createElementNS(SVG_NS, 'a');
+            link.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '/wiki/entity/' + node.id);
+            link.setAttribute('href', '/wiki/entity/' + node.id);
+            var text = setEl('text', { x: node.x, y: node.y - 12, 'text-anchor': 'middle', class: 'graph-label' });
+            text.textContent = node.name;
+            link.appendChild(text);
+
+            circle.addEventListener('click', function () { loadNeighborhood(node.id); });
+            group.appendChild(circle);
+            group.appendChild(link);
+            nodesGroup.appendChild(group);
+        });
+
+        svg.style.display = data.nodes.length ? '' : 'none';
+        emptyMessage.style.display = data.nodes.length ? 'none' : '';
+        resetViewBox();
+    }
+
+    function loadNeighborhood(entityId) {
+        fetch('/wiki/graph/data?entity_id=' + encodeURIComponent(entityId))
+            .then(function (response) { return response.ok ? response.json() : null; })
+            .then(function (data) { if (data) { draw(data); } });
+    }
+
+    var searchDebounce = null;
     searchBox.addEventListener('input', function () {
-        var query = searchBox.value.trim().toLowerCase();
+        var query = searchBox.value.trim();
+        clearTimeout(searchDebounce);
         if (!query) {
-            clearFocus();
+            clearResults();
             return;
         }
-        var match = data.nodes.find(function (n) { return n.name.toLowerCase().includes(query); });
-        if (match) {
-            focusedId = null; // force setFocus to (re)apply even if same node as before
-            setFocus(match.id);
-        }
+        searchDebounce = setTimeout(function () {
+            fetch('/wiki/graph/search?q=' + encodeURIComponent(query))
+                .then(function (response) { return response.ok ? response.json() : []; })
+                .then(function (matches) {
+                    clearResults();
+                    if (matches.length === 1) {
+                        loadNeighborhood(matches[0].id);
+                        return;
+                    }
+                    matches.forEach(function (match) {
+                        var li = document.createElement('li');
+                        li.textContent = match.name;
+                        li.addEventListener('click', function () {
+                            clearResults();
+                            searchBox.value = match.name;
+                            loadNeighborhood(match.id);
+                        });
+                        resultsList.appendChild(li);
+                    });
+                });
+        }, 150);
     });
 
-    // Pan (pointer drag) and zoom (wheel) via viewBox.
+    // Pan (pointer drag) and zoom (wheel) via viewBox - unchanged from the
+    // full-graph version, just now applied to whatever small neighborhood
+    // is currently drawn.
     var viewBox = { x: 0, y: 0, w: 600, h: 600 };
     function applyViewBox() {
         svg.setAttribute('viewBox', viewBox.x + ' ' + viewBox.y + ' ' + viewBox.w + ' ' + viewBox.h);
+    }
+    function resetViewBox() {
+        viewBox = { x: 0, y: 0, w: 600, h: 600 };
+        applyViewBox();
     }
 
     svg.addEventListener('wheel', function (e) {
@@ -136,9 +160,14 @@
     });
     svg.addEventListener('pointerup', function () { dragging = false; });
     svg.addEventListener('pointerleave', function () { dragging = false; });
+
+    // A ?focus=<entity_id> deep link (e.g. from an entity's wiki page)
+    // auto-loads that entity's neighborhood on arrival.
+    var params = new URLSearchParams(window.location.search);
+    var focusId = params.get('focus');
+    if (focusId) {
+        loadNeighborhood(focusId);
+    }
 })();
 </script>
-{% else %}
-<p>No relationships have been extracted yet.</p>
-{% endif %}
 {% endblock %}

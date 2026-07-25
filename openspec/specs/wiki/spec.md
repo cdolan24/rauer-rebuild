@@ -42,11 +42,15 @@ Navigation links from the wiki to the chat application SHALL use an absolute URL
 - **THEN** the browser navigates to the chat application's actual address, regardless of the wiki being served from a different origin
 
 ### Requirement: Wiki Entity Page
-The system SHALL expose a page per entity showing an LLM-generated summary grounded in the entity's actual mention context, a "Relationships" section listing related entities and the nature of each relationship, and a list of citations for where that entity is mentioned. The summary SHALL be generated automatically as part of document ingestion rather than on first page view, so the wiki is fully legible immediately after processing; if a summary is unavailable (not yet generated, or generation failed), the page SHALL fall back to the entity's stored description rather than failing to render.
+The system SHALL expose a page per entity showing an LLM-generated summary grounded in the entity's actual mention context, a "Relationships" section listing related entities and the nature of each relationship, a list of citations for where that entity is mentioned, and a link into the relationship graph page focused on that entity. The summary SHALL be generated automatically as part of document ingestion rather than on first page view, so the wiki is fully legible immediately after processing; if a summary is unavailable (not yet generated, or generation failed), the page SHALL fall back to the entity's stored description rather than failing to render.
 
 #### Scenario: Viewing an entity's wiki page
 - **WHEN** a user visits an entity's wiki page
-- **THEN** the page shows the entity's name, type, a generated summary description, a "Relationships" section, and a "Mentioned In" list of document/page citations
+- **THEN** the page shows the entity's name, type, a generated summary description, a "Relationships" section, a "Mentioned In" list of document/page citations, and a link into the relationship graph focused on that entity
+
+#### Scenario: Following the "View in graph" link
+- **WHEN** a user clicks the "View in graph" link on an entity's wiki page
+- **THEN** the browser navigates to the relationship graph page already focused on and displaying that entity's neighborhood
 
 #### Scenario: Summary already exists when the page is first viewed
 - **WHEN** a user visits an entity's wiki page for the first time, after that entity's document was ingested
@@ -126,24 +130,39 @@ The system SHALL expose a dedicated index page listing every location entity, fu
 - **THEN** every location entity is listed, each linking to its own entity page
 
 ### Requirement: Relationship Graph Page
-The system SHALL expose a page visualizing all entities and their extracted relationships as a node-link graph, with interactive navigation so the graph remains usable at large node/edge counts: panning, zooming, clicking a node to focus on its immediate neighborhood, and searching for a node by name. Clicking a node's name/label continues to navigate to its wiki page, so neighborhood focus (clicking the node's mark) and navigation (clicking its label) are two distinct click targets rather than colliding on the same one.
+The system SHALL expose a relationship graph page that renders empty (a search box, no nodes or edges) by default rather than laying out every entity/relationship at once, and SHALL load a single entity's direct-relationship neighborhood on demand - via a name search, clicking an already-drawn node, or a `focus` deep-link from that entity's own wiki page - drawing only that small neighborhood at a time. Clicking a node's name/label continues to navigate to its wiki page, so neighborhood loading (clicking the node's mark) and navigation (clicking its label) are two distinct click targets rather than colliding on the same one. Panning and zooming continue to apply to whatever neighborhood is currently drawn.
 
-#### Scenario: Viewing the relationship graph
-- **WHEN** a user visits the relationship graph page
-- **THEN** entities are shown as nodes and their extracted relationships as edges, and selecting a node navigates to that entity's wiki page
-
-#### Scenario: Viewing the graph with no relationships extracted yet
-- **WHEN** a user visits the relationship graph page before any relationships have been extracted
-- **THEN** the page renders without error, indicating there is nothing to show yet
-
-#### Scenario: Panning and zooming the graph
-- **WHEN** a user drags or scrolls within the graph view
-- **THEN** the visible portion of the graph pans or zooms accordingly, without navigating away from the page
-
-#### Scenario: Focusing on a node's neighborhood
-- **WHEN** a user clicks a node's mark
-- **THEN** that node and its directly-connected neighbors are visually highlighted while unrelated nodes and edges are visually de-emphasized, until the user clicks the same node's mark again or clicks another node's mark to focus it instead
+#### Scenario: Visiting the graph page with no search or focus
+- **WHEN** a user visits the relationship graph page with no search performed and no `focus` parameter
+- **THEN** the page renders with a search box and no nodes or edges drawn
 
 #### Scenario: Searching for an entity in the graph
-- **WHEN** a user enters a name into the graph's search box
-- **THEN** a matching node is highlighted and brought into view
+- **WHEN** a user enters a name into the graph's search box and a matching entity is found
+- **THEN** that entity and its direct relationships are fetched and drawn as a node-link neighborhood, centered on the matched entity
+
+#### Scenario: Focusing on a node's neighborhood by clicking it
+- **WHEN** a user clicks a drawn node's mark
+- **THEN** that node's own direct-relationship neighborhood is fetched and drawn in place of the previously-drawn neighborhood
+
+#### Scenario: Arriving via a focus deep-link
+- **WHEN** a user visits the relationship graph page with a `focus` parameter identifying an entity
+- **THEN** that entity's direct-relationship neighborhood is fetched and drawn automatically on load
+
+#### Scenario: Viewing the graph before any relationships have been extracted
+- **WHEN** a user visits the relationship graph page and no relationships exist in the system at all
+- **THEN** the page still renders normally with its search box, indicating there is nothing to search for yet, rather than erroring
+
+#### Scenario: Panning and zooming a drawn neighborhood
+- **WHEN** a user drags or scrolls within the graph view while a neighborhood is drawn
+- **THEN** the visible portion of that neighborhood pans or zooms accordingly, without navigating away from the page
+
+### Requirement: Entity Neighborhood Data Endpoint
+The system SHALL expose a JSON endpoint returning a given entity plus its direct (depth-1) relationships as node/edge data suitable for the relationship graph page to draw, and SHALL respond with an error for an entity id that does not exist.
+
+#### Scenario: Fetching a known entity's neighborhood
+- **WHEN** a client requests the neighborhood data endpoint for an entity that exists and has direct relationships
+- **THEN** the response includes that entity and each directly-related entity as nodes, and each of those relationships as edges
+
+#### Scenario: Fetching neighborhood data for an unknown entity
+- **WHEN** a client requests the neighborhood data endpoint for an entity id that does not exist
+- **THEN** the response is an error rather than empty or malformed node/edge data

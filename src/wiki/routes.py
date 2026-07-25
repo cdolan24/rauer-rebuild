@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from src.pipeline.entity_extractor import CURATED_ENTITY_TYPES
@@ -79,28 +79,54 @@ def wiki_locations(request: Request) -> HTMLResponse:
     )
 
 
+def _neighborhood_layout(entity, related_entities: list) -> tuple[list[dict], list[dict]]:
+    """Position `entity` at the SVG center and its direct neighbors evenly
+    around a fixed-radius circle - a small subgraph like this (one focus
+    entity plus its immediate relationships) is legible on a plain circle
+    without any force-directed layout; that's only worth the effort at the
+    whole-graph scale this endpoint deliberately never renders."""
+    center, radius = 300, 250
+    positions = {entity.id: (center, center)}
+    count = len(related_entities) or 1
+    for i, related in enumerate(related_entities):
+        positions[related.id] = (
+            center + radius * math.cos(2 * math.pi * i / count),
+            center + radius * math.sin(2 * math.pi * i / count),
+        )
+    nodes = [
+        {"id": e.id, "name": e.name, "x": positions[e.id][0], "y": positions[e.id][1]}
+        for e in [entity, *related_entities]
+    ]
+    return nodes, positions
+
+
 @router.get("/wiki/graph", response_class=HTMLResponse)
 def wiki_graph(request: Request) -> HTMLResponse:
-    """A minimal, dependency-free node-link view: entities that participate
-    in at least one relationship are laid out on a circle (no client-side JS
-    or graph library needed) and connected by straight edges."""
+    """The graph page renders empty by default - a search box and no nodes
+    or edges - rather than laying out the whole entity/relationship graph
+    at once (illegible at the real ~900-entity/~4,000-relationship scale).
+    A specific entity's neighborhood is loaded on demand client-side via
+    /wiki/graph/data, seeded by search, node click, or a ?focus= deep link;
+    this route stays a dumb shell that doesn't need to know about any of
+    that - it's read from window.location in the page's own JS."""
+    return _templates.TemplateResponse(request, "graph.html", _base_context(request))
+
+
+@router.get("/wiki/graph/data")
+def wiki_graph_data(entity_id: int, request: Request) -> JSONResponse:
+    """JSON neighborhood for one entity: itself plus its direct (depth-1)
+    relationships, in the {nodes, edges} shape graph.html already expects."""
     entity_store = request.app.state.entity_store
-    relationships = entity_store.list_all_relationships()
-    involved_ids = {r.entity_id for r in relationships} | {r.related_entity_id for r in relationships}
-    entities = [e for e in entity_store.list_all() if e.id in involved_ids]
+    entity = entity_store.get(entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
 
-    center, radius = 300, 250
-    positions = {
-        entity.id: (
-            center + radius * math.cos(2 * math.pi * i / len(entities)),
-            center + radius * math.sin(2 * math.pi * i / len(entities)),
-        )
-        for i, entity in enumerate(entities)
-    }
-
-    nodes = [
-        {"id": e.id, "name": e.name, "x": positions[e.id][0], "y": positions[e.id][1]} for e in entities
+    relationships = entity_store.get_relationships(entity.id)
+    related_entities = [
+        related for r in relationships if (related := entity_store.get(r.related_entity_id)) is not None
     ]
+
+    nodes, positions = _neighborhood_layout(entity, related_entities)
     edges = [
         {
             "source_id": r.entity_id,
@@ -111,12 +137,21 @@ def wiki_graph(request: Request) -> HTMLResponse:
             "y2": positions[r.related_entity_id][1],
         }
         for r in relationships
-        if r.entity_id in positions and r.related_entity_id in positions
+        if r.related_entity_id in positions
     ]
 
-    return _templates.TemplateResponse(
-        request, "graph.html", {**_base_context(request), "nodes": nodes, "edges": edges}
-    )
+    return JSONResponse({"nodes": nodes, "edges": edges})
+
+
+@router.get("/wiki/graph/search")
+def wiki_graph_search(q: str, request: Request) -> JSONResponse:
+    """Small {id, name} match list for the graph page's search box - reuses
+    the same case-insensitive substring search the admin manual-merge picker
+    already uses, so the client never has to hold the full ~900-entity name
+    index just to find one starting point."""
+    entity_store = request.app.state.entity_store
+    matches = entity_store.search_by_name(q) if q.strip() else []
+    return JSONResponse([{"id": e.id, "name": e.name} for e in matches])
 
 
 @router.get("/wiki/category/{type_}", response_class=HTMLResponse)

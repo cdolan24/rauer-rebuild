@@ -34,6 +34,7 @@
             <li>No recorded relationships.</li>
             {% endfor %}
         </ul>
+        <p><a href="/wiki/graph?focus={{ entity.id }}">View in graph &rarr;</a></p>
         <h2>Mentioned In</h2>
         <ul class="citations">
             {% for mention in mentions %}
