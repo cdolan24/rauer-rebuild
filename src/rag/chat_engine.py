@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from src.rag.conversation_store import ConversationStore, ConversationTurn
 from src.rag.prompt_builder import build_messages
 from src.rag.retriever import Retriever
-from src.utils.ollama_client import OllamaClient
+from src.utils.chat_backend import ChatBackend
 
 NO_INFO_ANSWER = "I don't have information about that in the documents I've processed."
 
@@ -29,30 +29,27 @@ class ChatResponse:
 
 class ChatEngine:
     """Retrieve-then-generate RAG flow: embed question, search vector store,
-    build a prompt from the retrieved chunks, and generate an answer with a
-    local Ollama chat model. Citations are attached from chunk metadata, not
-    trusted to the LLM."""
+    build a prompt from the retrieved chunks, and generate an answer via the
+    configured chat backend (local Ollama or a hosted API - see
+    src/utils/chat_backend.py). Citations are attached from chunk metadata,
+    not trusted to the LLM."""
 
     def __init__(
         self,
         retriever: Retriever,
-        ollama_client: OllamaClient,
+        chat_backend: ChatBackend,
         conversation_store: ConversationStore,
-        chat_model: str,
         top_k: int = 5,
         min_score: float = 0.55,
         num_predict: int | None = None,
-        keep_alive: str | None = None,
         max_history_turns: int = 3,
     ) -> None:
         self._retriever = retriever
-        self._ollama_client = ollama_client
+        self._chat_backend = chat_backend
         self._conversation_store = conversation_store
-        self._chat_model = chat_model
         self._top_k = top_k
         self._min_score = min_score
         self._num_predict = num_predict
-        self._keep_alive = keep_alive
         self._max_history_turns = max_history_turns
 
     def _bounded_history(self, conversation_id: str) -> list[ConversationTurn]:
@@ -71,9 +68,7 @@ class ChatEngine:
             return ChatResponse(answer=NO_INFO_ANSWER, citations=[])
 
         messages = build_messages(question, relevant, history)
-        answer = self._ollama_client.chat(
-            self._chat_model, messages, num_predict=self._num_predict, keep_alive=self._keep_alive
-        )
+        answer = self._chat_backend.chat(messages, num_predict=self._num_predict)
 
         citations = [
             Citation(
@@ -106,9 +101,7 @@ class ChatEngine:
 
         messages = build_messages(question, relevant, history)
         fragments: list[str] = []
-        for fragment in self._ollama_client.chat_stream(
-            self._chat_model, messages, num_predict=self._num_predict, keep_alive=self._keep_alive
-        ):
+        for fragment in self._chat_backend.chat_stream(messages, num_predict=self._num_predict):
             fragments.append(fragment)
             yield fragment
 

@@ -14,6 +14,7 @@ from src.api.schemas import (
     SourceModel,
 )
 from src.rag.chat_engine import ChatResponse
+from src.utils.chat_backend import ChatBackendError
 from src.utils.ollama_client import OllamaError
 
 router = APIRouter(tags=["chat"])
@@ -31,7 +32,7 @@ def chat(payload: ChatRequest, request: Request) -> ChatResponseModel:
     start = time.monotonic()
     try:
         result = chat_engine.ask(payload.conversation_id, payload.message)
-    except OllamaError as e:
+    except (OllamaError, ChatBackendError) as e:
         raise HTTPException(status_code=503, detail=f"Local LLM service unavailable: {e}") from e
     elapsed_ms = int((time.monotonic() - start) * 1000)
 
@@ -84,7 +85,7 @@ def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
                     )
                 else:
                     yield _sse_event({"type": "token", "content": item})
-        except OllamaError as e:
+        except (OllamaError, ChatBackendError) as e:
             yield _sse_event({"type": "error", "detail": f"Local LLM service unavailable: {e}"})
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

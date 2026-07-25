@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.database.entity_store import EntityStore
 from src.pipeline.entity_extractor import reclassify_entities
+from src.utils.chat_backend import build_chat_backend
 from src.utils.config import load_config
 from src.utils.logging import get_logger, setup_logging
 from src.utils.ollama_client import OllamaClient
@@ -31,6 +32,7 @@ def main() -> int:
     setup_logging(config.log_level)
 
     ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
+    chat_backend = build_chat_backend(config, ollama_client)
     entity_store = EntityStore(config.data_storage_path)
 
     entities = entity_store.list_all()
@@ -39,7 +41,7 @@ def main() -> int:
         return 0
 
     logger.info("Reclassifying %d entities...", len(entities))
-    updates = reclassify_entities(entities, ollama_client, config.ollama.chat_model)
+    updates = reclassify_entities(entities, chat_backend)
 
     for entity_id, new_type in updates.items():
         entity_store.set_type(entity_id, new_type)

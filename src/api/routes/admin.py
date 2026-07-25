@@ -87,12 +87,11 @@ def scan_for_duplicates(payload: DedupeScanRequest, request: Request) -> DedupeC
     previous scan (already-reviewed candidates are kept as history)."""
     _check_admin(request, payload.admin_password)
 
-    config = request.app.state.config
     entity_store = request.app.state.entity_store
-    ollama_client = request.app.state.ollama_client
+    chat_backend = request.app.state.chat_backend
 
     entities = entity_store.list_all()
-    groups = find_duplicate_groups(entities, ollama_client, config.ollama.chat_model)
+    groups = find_duplicate_groups(entities, chat_backend)
     entity_store.save_candidates([(g.keep_id, g.merge_ids) for g in groups])
 
     candidates = [_candidate_model(entity_store, c) for c in entity_store.list_candidates(status="pending")]

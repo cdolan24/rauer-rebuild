@@ -81,6 +81,11 @@ class HealthResponse(BaseModel):
     vector_db: str
     models_loaded: list[str]
     documents_indexed: int
+    # The configured chat-generation backend ("ollama" or "hosted_api") and
+    # its own reachability - separate from `ollama` above, which reports the
+    # embeddings dependency that's always active regardless of chat backend.
+    chat_backend: str
+    chat_backend_status: str
 
 
 class AdminAuthRequest(BaseModel):

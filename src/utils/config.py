@@ -57,6 +57,17 @@ class FrontendConfig:
 
 
 @dataclass
+class HostedLlmConfig:
+    """Settings for the hosted-API chat backend (`chat_backend: "hosted_api"`).
+    Unused when `chat_backend` is "ollama" (the default)."""
+
+    provider: str
+    model: str
+    api_key: str | None
+    max_tokens: int
+
+
+@dataclass
 class Config:
     ollama: OllamaConfig
     chunking: ChunkingConfig
@@ -71,6 +82,11 @@ class Config:
     admin_password: str | None
     controller_port: int
     controller_url: str
+    # Which backend chat generation uses - "ollama" (default, local-only) or
+    # "hosted_api" (routes to hosted_llm, see HostedLlmConfig). Embeddings and
+    # the vision model always use Ollama regardless of this setting.
+    chat_backend: str
+    hosted_llm: HostedLlmConfig
 
 
 class ConfigError(Exception):
@@ -151,6 +167,13 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         controller_port=int(raw.get("controller", {}).get("port", 8100)),
         controller_url=raw.get("controller", {}).get("url")
         or f"http://127.0.0.1:{int(raw.get('controller', {}).get('port', 8100))}",
+        chat_backend=raw.get("chat_backend", "ollama"),
+        hosted_llm=HostedLlmConfig(
+            provider=raw.get("hosted_llm", {}).get("provider", "anthropic"),
+            model=raw.get("hosted_llm", {}).get("model", "claude-haiku-4-5"),
+            api_key=raw.get("hosted_llm", {}).get("api_key") or None,
+            max_tokens=int(raw.get("hosted_llm", {}).get("max_tokens", 1024)),
+        ),
     )
 
 

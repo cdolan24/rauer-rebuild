@@ -13,6 +13,7 @@ from src.pipeline.image_extractor import describe_image_heavy_pages
 from src.pipeline.mention_context import gather_mention_context
 from src.pipeline.pdf_extractor import ExtractedDocument, PDFExtractionError, extract_pdf
 from src.pipeline.relationship_extractor import extract_relationships_for_document
+from src.utils.chat_backend import ChatBackend, ChatBackendError
 from src.utils.logging import get_logger
 from src.utils.ollama_client import OllamaClient, OllamaError
 from src.wiki.summary import generate_entity_summary
@@ -36,7 +37,7 @@ def write_processed_text(document: ExtractedDocument, processed_dir: str) -> Non
 
 
 def _prepare_wiki_data(
-    entity_store: EntityStore, vector_store: VectorStore, ollama_client: OllamaClient, chat_model: str
+    entity_store: EntityStore, vector_store: VectorStore, chat_backend: ChatBackend
 ) -> None:
     """Generate a wiki summary and relationships for every entity that
     doesn't have them yet, so the wiki is fully legible immediately after
@@ -60,10 +61,8 @@ def _prepare_wiki_data(
         mentions = entity_store.get_mentions(entity.id)
         mention_context = gather_mention_context(mentions, vector_store)
         try:
-            summary = generate_entity_summary(
-                entity, len(mentions), mention_context, ollama_client, chat_model
-            )
-        except OllamaError as e:
+            summary = generate_entity_summary(entity, len(mentions), mention_context, chat_backend)
+        except ChatBackendError as e:
             logger.warning(
                 "Could not generate wiki summary for entity %d (%s): %s", entity.id, entity.name, e
             )
@@ -81,9 +80,7 @@ def _prepare_wiki_data(
     # done, so re-ingesting other documents doesn't keep re-querying it.
     to_relate = [e for e in all_entities if not entity_store.get_relationships(e.id)]
     if to_relate:
-        extract_relationships_for_document(
-            to_relate, entity_store, vector_store, ollama_client, chat_model
-        )
+        extract_relationships_for_document(to_relate, entity_store, vector_store, chat_backend)
 
 
 def ingest_pdf(
@@ -96,7 +93,7 @@ def ingest_pdf(
     chunk_overlap: int,
     processed_dir: str,
     entity_store: EntityStore | None = None,
-    chat_model: str | None = None,
+    chat_backend: ChatBackend | None = None,
     vision_model: str | None = None,
 ) -> bool:
     """Run the full ingestion pipeline for a single PDF. Returns True on success."""
@@ -137,18 +134,18 @@ def ingest_pdf(
         "Processed %s: %d pages, %d chunks", pdf_path.name, document.page_count, len(chunks)
     )
 
-    if entity_store is not None and chat_model is not None:
+    if entity_store is not None and chat_backend is not None:
         try:
             # extract_entities_for_document already logs its own entity count.
-            extract_entities_for_document(chunks, document_id, ollama_client, chat_model, entity_store)
-        except OllamaError as e:
+            extract_entities_for_document(chunks, document_id, chat_backend, entity_store)
+        except ChatBackendError as e:
             # Entity tagging is an enhancement, not core to ingestion succeeding -
             # don't fail an otherwise-successful ingestion over it.
             logger.error("Entity extraction failed for %s: %s", pdf_path, e)
 
         try:
-            _prepare_wiki_data(entity_store, vector_store, ollama_client, chat_model)
-        except OllamaError as e:
+            _prepare_wiki_data(entity_store, vector_store, chat_backend)
+        except ChatBackendError as e:
             # Same reasoning - the wiki still has a lazy-generation fallback
             # for anything left unsummarized.
             logger.error("Wiki dedup/summary prep failed for %s: %s", pdf_path, e)

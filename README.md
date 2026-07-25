@@ -1,8 +1,11 @@
 # Malifaux Document Explorer
 
 AI-powered document intelligence for Malifaux story/lore PDFs. Ingests story text into a
-local vector database and answers questions about it through a citation-backed RAG chatbot,
-running entirely on local models via [Ollama](https://ollama.ai/) - no cloud API calls.
+local vector database and answers questions about it through a citation-backed RAG chatbot.
+Embeddings always run locally via [Ollama](https://ollama.ai/). Chat generation (RAG answers,
+wiki summaries, entity extraction) runs on Ollama too by default - fully local, no cloud API
+calls - or can be routed to a hosted API instead (see "Deployment" below) for deployments that
+don't want to pay for a GPU instance just to run a local chat model.
 
 See `openspec/changes/archive/2026-07-06-rebuild-mvp/` for the design rationale and full
 task breakdown behind this build.
@@ -51,6 +54,29 @@ python src/frontend/app.py
 
 Open the frontend (default `http://localhost:7860`) to chat with the ingested documents
 and browse sources. API docs are available at `http://localhost:8000/docs`.
+
+## Deployment
+
+`deploy/setup_ec2.sh` provisions a single host (systemd + Nginx, no containers - see
+`openspec/specs/deployment/`) under one of two profiles, selected via `DEPLOY_PROFILE`:
+
+| Profile | Instance | Chat generation | Embeddings | When to use |
+|---|---|---|---|---|
+| `gpu-inhouse` (default) | GPU-backed, e.g. `g4dn.xlarge` | Local Ollama (`llama3.2`) | Local Ollama | Hardware you already own - fully local, no cloud LLM calls |
+| `cpu-hosted-api` | Small CPU-only, e.g. `t3.small` | Hosted API (`hosted_llm` in `config.yaml`, default Anthropic's `claude-haiku-4-5`) | Local Ollama | Cost-optimized AWS - a GPU instance running 24/7 just to serve chat generation costs far more than a hosted API does for typical usage of this app |
+
+```bash
+# In-house / GPU (default)
+sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./deploy/setup_ec2.sh
+
+# Cost-optimized AWS, no GPU
+sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git DEPLOY_PROFILE=cpu-hosted-api ./deploy/setup_ec2.sh
+```
+
+Under `cpu-hosted-api`, set a real `hosted_llm.api_key` in `config.yaml` before starting
+services - the app fails fast at startup rather than on the first chat request if it's left
+as the placeholder. Embeddings and the optional vision model always run on local Ollama in
+both profiles; only chat generation moves to the hosted API.
 
 ## Tests
 

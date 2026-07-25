@@ -8,6 +8,7 @@ from src.pipeline.relationship_extractor import (
     extract_relationships_for_document,
     extract_relationships_for_entity,
 )
+from src.utils.chat_backend import OllamaChatBackend
 from src.utils.ollama_client import OllamaError
 
 
@@ -57,7 +58,7 @@ def test_extract_relationships_for_entity_matches_candidate_by_name():
     client = ScriptedRelationshipClient('[{"name": "The Guild", "description": "member of"}]')
 
     results = extract_relationships_for_entity(
-        justice, "Lady Justice serves the Guild.", [guild], client, "fake-chat"
+        justice, "Lady Justice serves the Guild.", [guild], OllamaChatBackend(client, "fake-chat", None)
     )
 
     assert results == [(2, "member of")]
@@ -69,7 +70,7 @@ def test_extract_relationships_for_entity_ignores_unknown_candidate_name():
     client = ScriptedRelationshipClient('[{"name": "Some Other Entity", "description": "ally of"}]')
 
     results = extract_relationships_for_entity(
-        justice, "passage", [guild], client, "fake-chat"
+        justice, "passage", [guild], OllamaChatBackend(client, "fake-chat", None)
     )
 
     assert results == []
@@ -81,7 +82,7 @@ def test_extract_relationships_for_entity_returns_empty_on_no_relationships_foun
     client = ScriptedRelationshipClient("[]")
 
     results = extract_relationships_for_entity(
-        justice, "passage", [guild], client, "fake-chat"
+        justice, "passage", [guild], OllamaChatBackend(client, "fake-chat", None)
     )
 
     assert results == []
@@ -93,7 +94,7 @@ def test_extract_relationships_for_entity_survives_ollama_failure():
     client = FailingClient()
 
     results = extract_relationships_for_entity(
-        justice, "passage", [guild], client, "fake-chat"
+        justice, "passage", [guild], OllamaChatBackend(client, "fake-chat", None)
     )
 
     assert results == []
@@ -103,11 +104,11 @@ def test_extract_relationships_for_entity_skips_call_with_no_candidates_or_conte
     justice = _entity_no_store("Lady Justice", 1)
     client = ScriptedRelationshipClient('[{"name": "X", "description": "y"}]')
 
-    assert extract_relationships_for_entity(justice, "passage", [], client, "fake-chat") == []
+    assert extract_relationships_for_entity(justice, "passage", [], OllamaChatBackend(client, "fake-chat", None)) == []
     assert client.calls == 0
 
     guild = _entity_no_store("The Guild", 2, type_="faction")
-    assert extract_relationships_for_entity(justice, "", [guild], client, "fake-chat") == []
+    assert extract_relationships_for_entity(justice, "", [guild], OllamaChatBackend(client, "fake-chat", None)) == []
     assert client.calls == 0
 
 
@@ -130,7 +131,7 @@ def test_extract_relationships_for_document_stores_relationships(tmp_path):
     client = ScriptedRelationshipClient('[{"name": "The Guild", "description": "member of"}]')
 
     count = extract_relationships_for_document(
-        [justice], store, vector_store, client, "fake-chat"
+        [justice], store, vector_store, OllamaChatBackend(client, "fake-chat", None)
     )
 
     assert count == 1
@@ -161,7 +162,7 @@ def test_extract_relationships_for_document_one_entity_failure_does_not_block_ot
     client = FailingClient()  # every call fails - both entities should just get zero relationships
 
     count = extract_relationships_for_document(
-        [store.get(a_id), store.get(b_id)], store, vector_store, client, "fake-chat"
+        [store.get(a_id), store.get(b_id)], store, vector_store, OllamaChatBackend(client, "fake-chat", None)
     )
 
     assert count == 0
@@ -192,4 +193,4 @@ def test_extract_relationships_for_document_empty_entities_returns_zero(tmp_path
     vector_store = FakeVectorStore({})
     client = ScriptedRelationshipClient("[]")
 
-    assert extract_relationships_for_document([], store, vector_store, client, "fake-chat") == 0
+    assert extract_relationships_for_document([], store, vector_store, OllamaChatBackend(client, "fake-chat", None)) == 0

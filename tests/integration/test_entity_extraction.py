@@ -6,6 +6,7 @@ from src.database.entity_store import EntityStore
 from src.pipeline import entity_extractor
 from src.pipeline.chunker import Chunk
 from src.pipeline.entity_extractor import extract_entities_for_document, reclassify_entities
+from src.utils.chat_backend import OllamaChatBackend
 from src.utils.ollama_client import OllamaError
 
 _MULTI_BATCH_CHUNK_COUNT = entity_extractor.BATCH_SIZE * 2 + 5  # guarantees >=3 batches
@@ -23,7 +24,7 @@ class ScriptedOllamaClient:
         self.calls = 0
         self._lock = threading.Lock()
 
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         with self._lock:
             self.calls += 1
         return self.response
@@ -45,7 +46,7 @@ class FlakyOllamaClient:
         self.calls = 0
         self._lock = threading.Lock()
 
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         with self._lock:
             self.calls += 1
             should_fail = self.calls == 1
@@ -77,7 +78,7 @@ def test_extract_entities_creates_entities_and_mentions(tmp_path):
     client = ScriptedOllamaClient(response)
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", OllamaChatBackend(client, "fake-chat", None), store)
 
     assert result.entity_count == 2
     assert result.uncovered_chunk_ids == []
@@ -100,7 +101,7 @@ def test_extract_entities_dedupes_across_batches(tmp_path):
     client = ScriptedOllamaClient(response)
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", OllamaChatBackend(client, "fake-chat", None), store)
 
     assert result.entity_count == 1
     assert client.calls > 1  # multiple batches, same entity each time
@@ -121,7 +122,7 @@ def test_extract_entities_survives_a_failed_batch(tmp_path):
     client = FlakyOllamaClient(response)
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", OllamaChatBackend(client, "fake-chat", None), store)
 
     assert result.entity_count == 1  # found in later batches despite the first one failing
     assert result.uncovered_chunk_ids == []  # retried and recovered, nothing lost
@@ -139,7 +140,7 @@ class PermanentlyFailingOllamaClient:
         self.response = response
         self.fail_marker = fail_marker
 
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         if self.fail_marker in messages[-1]["content"]:
             raise OllamaError("simulated permanent failure")
         return self.response
@@ -168,7 +169,7 @@ def test_extract_entities_reports_uncovered_chunks_after_permanent_batch_failure
     client = PermanentlyFailingOllamaClient(response, fail_marker="UNRECOVERABLE")
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", OllamaChatBackend(client, "fake-chat", None), store)
 
     assert result.entity_count == 1
     assert set(result.uncovered_chunk_ids) == {c.chunk_id for c in bad_chunks}
@@ -185,7 +186,7 @@ class UnparseableThenGoodOllamaClient:
         self.calls = 0
         self._lock = threading.Lock()
 
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         with self._lock:
             self.calls += 1
             is_first = self.calls == 1
@@ -208,7 +209,7 @@ class PermanentlyUnparseableOllamaClient:
         self.response = response
         self.fail_marker = fail_marker
 
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         if self.fail_marker in messages[-1]["content"]:
             return "I don't see any named entities worth listing here."
         return self.response
@@ -233,7 +234,7 @@ def test_extract_entities_survives_an_unparseable_batch_response(tmp_path):
     client = UnparseableThenGoodOllamaClient(response)
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", OllamaChatBackend(client, "fake-chat", None), store)
 
     assert result.entity_count == 1  # found in later batches despite the first one failing
     assert result.uncovered_chunk_ids == []  # retried and recovered, nothing lost
@@ -259,7 +260,7 @@ def test_extract_entities_reports_uncovered_chunks_after_permanently_unparseable
     client = PermanentlyUnparseableOllamaClient(response, fail_marker="UNRECOVERABLE")
     store = EntityStore(str(tmp_path / "entities.db"))
 
-    result = extract_entities_for_document(chunks, "doc1", client, "fake-chat", store)
+    result = extract_entities_for_document(chunks, "doc1", OllamaChatBackend(client, "fake-chat", None), store)
 
     assert result.entity_count == 1
     assert set(result.uncovered_chunk_ids) == {c.chunk_id for c in bad_chunks}
@@ -275,7 +276,7 @@ class ByNameOllamaClient:
         self.calls = 0
         self._lock = threading.Lock()
 
-    def chat(self, model, messages, temperature=0.7):
+    def chat(self, model, messages, temperature=0.7, num_predict=None, keep_alive=None):
         with self._lock:
             self.calls += 1
         content = messages[-1]["content"]
@@ -302,7 +303,7 @@ def test_reclassify_entities_moves_real_person_out_of_character(tmp_path):
     character = _entity(store, "Seamus", description="A wealthy and charismatic individual")
     client = ByNameOllamaClient({"Nathan Caroland": "real-person", "Seamus": "character"})
 
-    updates = reclassify_entities([author, character], client, "fake-chat")
+    updates = reclassify_entities([author, character], OllamaChatBackend(client, "fake-chat", None))
 
     assert updates == {author.id: "real-person"}  # Seamus unchanged, not included
 
@@ -313,7 +314,7 @@ def test_reclassify_entities_discards_novel_tag_below_threshold(tmp_path):
     e2 = _entity(store, "E2")
     client = ByNameOllamaClient({"E1": "ghost", "E2": "ghost"})  # only 2, below DYNAMIC_TAG_MIN_COUNT=3
 
-    updates = reclassify_entities([e1, e2], client, "fake-chat")
+    updates = reclassify_entities([e1, e2], OllamaChatBackend(client, "fake-chat", None))
 
     assert updates == {}  # novel tag didn't reach the threshold, both revert to original type
 
@@ -323,7 +324,7 @@ def test_reclassify_entities_keeps_novel_tag_at_threshold(tmp_path):
     entities = [_entity(store, f"E{i}") for i in range(3)]
     client = ByNameOllamaClient({e.name: "ghost" for e in entities})  # 3 meets DYNAMIC_TAG_MIN_COUNT
 
-    updates = reclassify_entities(entities, client, "fake-chat")
+    updates = reclassify_entities(entities, OllamaChatBackend(client, "fake-chat", None))
 
     assert updates == {e.id: "ghost" for e in entities}
 
@@ -333,7 +334,7 @@ def test_reclassify_entities_keeps_original_type_on_ollama_error(tmp_path):
     entity = _entity(store, "Nathan Caroland", type_="character")
     client = FlakyOllamaClient('{"type": "real-person"}')
 
-    updates = reclassify_entities([entity], client, "fake-chat")
+    updates = reclassify_entities([entity], OllamaChatBackend(client, "fake-chat", None))
 
     assert updates == {}  # the one call fails (FlakyOllamaClient fails call #1), type unchanged
 
@@ -346,7 +347,7 @@ def test_reclassify_entities_skips_blank_description_without_calling_ollama(tmp_
     entity = _entity(store, "Philip", type_="character", description="")
     client = ByNameOllamaClient({"Philip": "real-person"})
 
-    updates = reclassify_entities([entity], client, "fake-chat")
+    updates = reclassify_entities([entity], OllamaChatBackend(client, "fake-chat", None))
 
     assert updates == {}
     assert client.calls == 0

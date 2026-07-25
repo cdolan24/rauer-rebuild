@@ -15,6 +15,7 @@ from src.database.vector_store import VectorStore
 from src.rag.chat_engine import ChatEngine
 from src.rag.conversation_store import ConversationStore
 from src.rag.retriever import Retriever
+from src.utils.chat_backend import build_chat_backend
 from src.utils.config import get_config_path, load_config
 from src.utils.logging import get_logger, setup_logging
 from src.utils.ollama_client import OllamaClient
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     setup_logging(config.log_level)
 
     ollama_client = OllamaClient(config.ollama.base_url, timeout=config.ollama.request_timeout)
+    chat_backend = build_chat_backend(config, ollama_client)
     vector_store = VectorStore(config.vector_db.path, config.vector_db.collection_name)
     registry = DocumentRegistry(config.data_storage_path)
     entity_store = EntityStore(config.data_storage_path)
@@ -39,17 +41,16 @@ async def lifespan(app: FastAPI):
     )
     chat_engine = ChatEngine(
         retriever,
-        ollama_client,
+        chat_backend,
         conversation_store,
-        chat_model=config.ollama.chat_model,
         min_score=config.rag_min_score,
         num_predict=config.ollama.num_predict,
-        keep_alive=config.ollama.keep_alive,
         max_history_turns=config.rag_max_history_turns,
     )
 
     app.state.config = config
     app.state.ollama_client = ollama_client
+    app.state.chat_backend = chat_backend
     app.state.vector_store = vector_store
     app.state.registry = registry
     app.state.entity_store = entity_store

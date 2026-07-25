@@ -170,3 +170,41 @@ def test_frontend_public_url_can_be_overridden(tmp_path):
     config = load_config(config_path)
 
     assert config.frontend.public_url == "http://example.com:7860"
+
+
+def test_chat_backend_defaults_to_ollama_when_absent(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG, encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.chat_backend == "ollama"
+
+
+def test_hosted_llm_defaults_when_absent(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_BASE_CONFIG, encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.hosted_llm.provider == "anthropic"
+    assert config.hosted_llm.model == "claude-haiku-4-5"
+    assert config.hosted_llm.api_key is None
+    assert config.hosted_llm.max_tokens == 1024
+
+
+def test_hosted_llm_can_be_configured(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        _BASE_CONFIG
+        + '\nchat_backend: "hosted_api"\n'
+        + '\nhosted_llm:\n  model: "claude-opus-4-8"\n  api_key: "sk-real-key"\n  max_tokens: 2048\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.chat_backend == "hosted_api"
+    assert config.hosted_llm.model == "claude-opus-4-8"
+    assert config.hosted_llm.api_key == "sk-real-key"
+    assert config.hosted_llm.max_tokens == 2048

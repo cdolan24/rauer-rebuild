@@ -6,6 +6,7 @@ from src.pipeline.embeddings import EmbeddedChunk
 from src.rag.chat_engine import NO_INFO_ANSWER, ChatEngine, ChatResponse
 from src.rag.conversation_store import ConversationStore
 from src.rag.retriever import Retriever
+from src.utils.chat_backend import OllamaChatBackend
 
 
 class CapturingOllamaClient:
@@ -44,7 +45,7 @@ def test_grounded_answer_has_citations(tmp_path, fake_ollama_client):
     vector_store = _seeded_vector_store(tmp_path, fake_ollama_client)
     retriever = Retriever(vector_store, fake_ollama_client, embedding_model="fake-embed")
     engine = ChatEngine(
-        retriever, fake_ollama_client, ConversationStore(), chat_model="fake-chat", min_score=0.0
+        retriever, OllamaChatBackend(fake_ollama_client, "fake-chat", None), ConversationStore(), min_score=0.0
     )
 
     response = engine.ask("conv-1", "Who is Aragorn?")
@@ -58,7 +59,7 @@ def test_grounded_answer_has_citations(tmp_path, fake_ollama_client):
 def test_no_relevant_content_falls_back(tmp_path, fake_ollama_client):
     empty_vector_store = VectorStore(path=str(tmp_path / "vector_db"), collection_name="test")
     retriever = Retriever(empty_vector_store, fake_ollama_client, embedding_model="fake-embed")
-    engine = ChatEngine(retriever, fake_ollama_client, ConversationStore(), chat_model="fake-chat")
+    engine = ChatEngine(retriever, OllamaChatBackend(fake_ollama_client, "fake-chat", None), ConversationStore())
 
     response = engine.ask("conv-1", "Who is Aragorn?")
 
@@ -71,7 +72,10 @@ def test_multi_turn_conversation_passes_prior_history(tmp_path, fake_ollama_clie
     retriever = Retriever(vector_store, fake_ollama_client, embedding_model="fake-embed")
     capturing_client = CapturingOllamaClient(fake_ollama_client)
     engine = ChatEngine(
-        retriever, capturing_client, ConversationStore(), chat_model="fake-chat", min_score=0.0
+        retriever,
+        OllamaChatBackend(capturing_client, "fake-chat", None),
+        ConversationStore(),
+        min_score=0.0,
     )
 
     engine.ask("conv-1", "Who is Aragorn?")
@@ -89,9 +93,8 @@ def test_history_beyond_max_turns_is_dropped(tmp_path, fake_ollama_client):
     capturing_client = CapturingOllamaClient(fake_ollama_client)
     engine = ChatEngine(
         retriever,
-        capturing_client,
+        OllamaChatBackend(capturing_client, "fake-chat", None),
         ConversationStore(),
-        chat_model="fake-chat",
         min_score=0.0,
         max_history_turns=2,
     )
@@ -115,9 +118,8 @@ def test_history_within_max_turns_is_unaffected(tmp_path, fake_ollama_client):
     capturing_client = CapturingOllamaClient(fake_ollama_client)
     engine = ChatEngine(
         retriever,
-        capturing_client,
+        OllamaChatBackend(capturing_client, "fake-chat", None),
         ConversationStore(),
-        chat_model="fake-chat",
         min_score=0.0,
         max_history_turns=5,
     )
@@ -134,7 +136,7 @@ def test_ask_stream_yields_fragments_then_final_response_with_citations(tmp_path
     vector_store = _seeded_vector_store(tmp_path, fake_ollama_client)
     retriever = Retriever(vector_store, fake_ollama_client, embedding_model="fake-embed")
     engine = ChatEngine(
-        retriever, fake_ollama_client, ConversationStore(), chat_model="fake-chat", min_score=0.0
+        retriever, OllamaChatBackend(fake_ollama_client, "fake-chat", None), ConversationStore(), min_score=0.0
     )
 
     events = list(engine.ask_stream("conv-1", "Who is Aragorn?"))
@@ -150,7 +152,7 @@ def test_ask_stream_yields_fragments_then_final_response_with_citations(tmp_path
 def test_ask_stream_no_relevant_content_yields_single_fallback_fragment(tmp_path, fake_ollama_client):
     empty_vector_store = VectorStore(path=str(tmp_path / "vector_db"), collection_name="test")
     retriever = Retriever(empty_vector_store, fake_ollama_client, embedding_model="fake-embed")
-    engine = ChatEngine(retriever, fake_ollama_client, ConversationStore(), chat_model="fake-chat")
+    engine = ChatEngine(retriever, OllamaChatBackend(fake_ollama_client, "fake-chat", None), ConversationStore())
 
     events = list(engine.ask_stream("conv-1", "Who is Aragorn?"))
 
@@ -162,7 +164,7 @@ def test_ask_stream_updates_conversation_history(tmp_path, fake_ollama_client):
     retriever = Retriever(vector_store, fake_ollama_client, embedding_model="fake-embed")
     conversation_store = ConversationStore()
     engine = ChatEngine(
-        retriever, fake_ollama_client, conversation_store, chat_model="fake-chat", min_score=0.0
+        retriever, OllamaChatBackend(fake_ollama_client, "fake-chat", None), conversation_store, min_score=0.0
     )
 
     list(engine.ask_stream("conv-1", "Who is Aragorn?"))

@@ -138,3 +138,70 @@ def unhealthy_api_client(tmp_path, monkeypatch):
     app = main_module.create_app()
     with TestClient(app) as client:
         yield client
+
+
+class _FakeUnreachableChatBackend:
+    """Stands in for a hosted-API backend that's down, independent of
+    Ollama's own health - lets tests verify the health endpoint reports the
+    two dependencies separately rather than conflating them."""
+
+    def is_healthy(self):
+        return False, "hosted_api"
+
+
+class _FakeFailingChatChatBackend:
+    """Embeddings/retrieval succeed (real FakeOllamaClient underneath), but
+    chat generation itself always fails - exercises the gap a live hosted-API
+    401 surfaced: chat.py used to only catch OllamaError, so a ChatBackendError
+    raised after retrieval already succeeded propagated as an unhandled 500
+    instead of the intended 503."""
+
+    def chat(self, messages, *, temperature=0.7, num_predict=None):
+        from src.utils.chat_backend import ChatBackendError
+
+        raise ChatBackendError("simulated hosted API failure")
+
+    def chat_stream(self, messages, *, temperature=0.7, num_predict=None):
+        from src.utils.chat_backend import ChatBackendError
+
+        raise ChatBackendError("simulated hosted API failure")
+        yield  # pragma: no cover - unreachable, satisfies generator shape
+
+    def is_healthy(self):
+        return False, "hosted_api"
+
+
+@pytest.fixture
+def chat_backend_failing_api_client(tmp_path, monkeypatch):
+    import src.api.main as main_module
+    from fastapi.testclient import TestClient
+
+    config_path = write_test_config(tmp_path)
+    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
+    monkeypatch.setattr(
+        main_module, "build_chat_backend", lambda config, ollama_client: _FakeFailingChatChatBackend()
+    )
+
+    app = main_module.create_app()
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def hosted_backend_unreachable_api_client(tmp_path, monkeypatch):
+    """Ollama (embeddings) stays healthy; only the configured chat backend
+    is down - the inverse of unhealthy_api_client, which fails both."""
+    import src.api.main as main_module
+    from fastapi.testclient import TestClient
+
+    config_path = write_test_config(tmp_path)
+    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
+    monkeypatch.setattr(
+        main_module, "build_chat_backend", lambda config, ollama_client: _FakeUnreachableChatBackend()
+    )
+
+    app = main_module.create_app()
+    with TestClient(app) as client:
+        yield client

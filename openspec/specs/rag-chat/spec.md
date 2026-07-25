@@ -1,7 +1,7 @@
 # rag-chat Specification
 
 ## Purpose
-Defines the retrieve-then-generate chat behavior: answering questions from retrieved context with source citations, running entirely on local Ollama models, with bounded multi-turn history and streamed responses.
+Defines the retrieve-then-generate chat behavior: answering questions from retrieved context with source citations, with bounded multi-turn history and streamed responses. Retrieval always embeds locally via Ollama; chat generation runs on Ollama by default or a hosted API depending on the configured chat backend (see llm-chat-backend).
 
 ## Requirements
 
@@ -45,12 +45,16 @@ The system SHALL maintain conversation context across multiple turns within a si
 - **WHEN** a user asks a follow-up question that depends on a previous question/answer in the same conversation
 - **THEN** the system uses the prior conversation context to interpret and answer the follow-up correctly
 
-### Requirement: Local-Only Model Execution
-The system SHALL perform all embedding and generation using locally-served models (via Ollama), with no calls to external/cloud LLM APIs at runtime.
+### Requirement: Local-Only Model Execution Is Conditional On The Configured Chat Backend
+Embedding generation SHALL always use locally-served models via Ollama, with no calls to external/cloud providers at runtime, regardless of configuration. Chat generation SHALL use locally-served models via Ollama with no external calls when `chat_backend` is `ollama` (the default); when `chat_backend` is `hosted_api`, chat generation calls are explicitly permitted to reach a configured hosted LLM API.
 
-#### Scenario: Chat request processed without network access to external LLM providers
-- **WHEN** a chat request is handled
+#### Scenario: Chat request processed with the default (Ollama) chat backend
+- **WHEN** a chat request is handled and `chat_backend` is `ollama`
 - **THEN** the only LLM/embedding calls made are to the local Ollama service, and no request is sent to any cloud LLM provider
+
+#### Scenario: Chat request processed with the hosted-API chat backend configured
+- **WHEN** a chat request is handled and `chat_backend` is `hosted_api`
+- **THEN** the chat-generation call is sent to the configured hosted LLM API, while the embedding call for retrieval still goes only to the local Ollama service
 
 ### Requirement: Entity-Aware Retrieval Boost
 When a question names a known entity, the system SHALL prioritize chunks tagged as mentioning that entity alongside plain vector similarity ranking.

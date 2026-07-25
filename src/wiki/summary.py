@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.database.entity_store import Entity
-from src.utils.ollama_client import OllamaClient
+from src.utils.chat_backend import ChatBackend
 
 _SYSTEM_PROMPT = (
     "You write a detailed, engaging wiki-style article for a fictional entity from the "
@@ -18,8 +18,7 @@ def generate_entity_summary(
     entity: Entity,
     mention_count: int,
     mention_context: str,
-    ollama_client: OllamaClient,
-    chat_model: str,
+    chat_backend: ChatBackend,
 ) -> str:
     """Generate a wiki-style article for an entity, grounded in the actual
     text of its mentions (`mention_context`, e.g. from
@@ -40,4 +39,4 @@ def generate_entity_summary(
             ),
         },
     ]
-    return ollama_client.chat(chat_model, messages, temperature=0.4)
+    return chat_backend.chat(messages, temperature=0.4)
