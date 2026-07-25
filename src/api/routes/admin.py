@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from src.api.schemas import (
     AdminQueryRequest,
     AdminQueryResponse,
+    BackendConfigResponse,
     DedupeCandidateActionRequest,
     DedupeCandidateActionResponse,
     DedupeCandidateListResponse,
@@ -14,8 +15,12 @@ from src.api.schemas import (
     DedupeScanRequest,
     EntityRefModel,
     EntitySearchResponse,
+    GpuInfoModel,
+    HostedLlmConfigModel,
     ManualMergeRequest,
     ManualMergeResponse,
+    SetBackendConfigRequest,
+    SetBackendConfigResponse,
     UndoableMergeModel,
     UndoableMergesResponse,
     UndoMergeRequest,
@@ -24,6 +29,9 @@ from src.api.schemas import (
 from src.database.entity_store import Entity
 from src.pipeline.entity_deduper import find_duplicate_groups
 from src.utils.auth import check_admin_password
+from src.utils.config import get_config_path, load_config
+from src.utils.config_writer import update_chat_backend_config
+from src.utils.gpu_detect import detect_gpu
 
 router = APIRouter(tags=["admin"])
 
@@ -228,3 +236,45 @@ def undo_merge(entity_id: int, payload: UndoMergeRequest, request: Request) -> U
         )
     entity_store.undo_merge(entity_id)
     return UndoMergeResponse(entity_id=entity_id, restored=True)
+
+
+@router.get("/admin/backend-config", response_model=BackendConfigResponse)
+def get_backend_config(request: Request, admin_password: str) -> BackendConfigResponse:
+    """Reports both the backend the running process actually loaded at
+    startup (`active_chat_backend`) and whatever is currently saved on disk
+    (`saved_chat_backend`) - these can differ if an admin has saved a new
+    choice but not yet restarted, which is exactly the state a restart
+    reminder needs to be visible about."""
+    _check_admin(request, admin_password)
+    active_config = request.app.state.config
+    saved_config = load_config(get_config_path())
+    gpu = detect_gpu()
+
+    return BackendConfigResponse(
+        active_chat_backend=active_config.chat_backend,
+        saved_chat_backend=saved_config.chat_backend,
+        hosted_llm=HostedLlmConfigModel(
+            model=saved_config.hosted_llm.model,
+            max_tokens=saved_config.hosted_llm.max_tokens,
+            api_key_configured=bool(saved_config.hosted_llm.api_key),
+        ),
+        gpu=GpuInfoModel(detected=gpu.detected, name=gpu.name),
+    )
+
+
+@router.post("/admin/backend-config", response_model=SetBackendConfigResponse)
+def set_backend_config(payload: SetBackendConfigRequest, request: Request) -> SetBackendConfigResponse:
+    _check_admin(request, payload.admin_password)
+    if payload.chat_backend not in ("ollama", "hosted_api"):
+        raise HTTPException(
+            status_code=400, detail=f"Unknown chat_backend '{payload.chat_backend}' (expected 'ollama' or 'hosted_api')"
+        )
+
+    update_chat_backend_config(
+        get_config_path(),
+        chat_backend=payload.chat_backend,
+        hosted_llm_model=payload.hosted_llm_model,
+        hosted_llm_api_key=payload.hosted_llm_api_key,
+        hosted_llm_max_tokens=payload.hosted_llm_max_tokens,
+    )
+    return SetBackendConfigResponse(saved_chat_backend=payload.chat_backend, restart_required=True)

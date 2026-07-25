@@ -246,17 +246,17 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
     def unlock_admin(password):
         hidden = gr.update(visible=False)
         if not password:
-            return hidden, hidden, hidden, hidden, "Enter the admin password.", None
+            return hidden, hidden, hidden, hidden, hidden, "Enter the admin password.", None
         try:
             valid = client.verify_admin_password(password)
         except ApiAuthError as e:
-            return hidden, hidden, hidden, hidden, str(e), None
+            return hidden, hidden, hidden, hidden, hidden, str(e), None
         except ApiClientError as e:
-            return hidden, hidden, hidden, hidden, f"Could not reach the backend: {e}", None
+            return hidden, hidden, hidden, hidden, hidden, f"Could not reach the backend: {e}", None
         if not valid:
-            return hidden, hidden, hidden, hidden, "Incorrect admin password.", None
+            return hidden, hidden, hidden, hidden, hidden, "Incorrect admin password.", None
         shown = gr.update(visible=True)
-        return shown, shown, shown, shown, "Unlocked.", password
+        return shown, shown, shown, shown, shown, "Unlocked.", password
 
     def run_admin_query(sql, admin_password):
         import pandas as pd
@@ -294,6 +294,63 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
             except ApiClientError as e:
                 statuses.append(f"**{service}**: unreachable ({e})")
         return " &nbsp;|&nbsp; ".join(statuses)
+
+    def _backend_status_markdown(config: dict) -> tuple[str, str]:
+        gpu = config["gpu"]
+        gpu_line = f"**GPU:** {gpu['name']}" if gpu["detected"] else "**GPU:** none detected"
+        if config["saved_chat_backend"] == "ollama" and not gpu["detected"]:
+            gpu_line += (
+                "\n\n⚠️ Local Ollama chat generation with no GPU detected can be very "
+                "slow (CPU-only inference) - see this project's own notes on that fragility."
+            )
+
+        active, saved = config["active_chat_backend"], config["saved_chat_backend"]
+        if active != saved:
+            status_line = (
+                f"**Active:** {active} &nbsp;|&nbsp; **Saved (restart required to apply):** {saved}"
+            )
+        else:
+            status_line = f"**Active:** {active}"
+        key_state = "configured" if config["hosted_llm"]["api_key_configured"] else "not set"
+        status_line += f" &nbsp;|&nbsp; **Hosted API key:** {key_state}"
+        return gpu_line, status_line
+
+    def load_backend_config(admin_password):
+        try:
+            config = client.get_backend_config(admin_password or "")
+        except ApiAuthError as e:
+            return "ollama", "claude-haiku-4-5", 1024, str(e), ""
+        except ApiClientError as e:
+            return "ollama", "claude-haiku-4-5", 1024, f"Could not reach the backend: {e}", ""
+        gpu_line, status_line = _backend_status_markdown(config)
+        return (
+            config["saved_chat_backend"],
+            config["hosted_llm"]["model"],
+            config["hosted_llm"]["max_tokens"],
+            gpu_line,
+            status_line,
+        )
+
+    def save_backend_config(chat_backend, model, api_key, max_tokens, admin_password):
+        try:
+            client.set_backend_config(
+                admin_password or "",
+                chat_backend=chat_backend,
+                hosted_llm_model=model or None,
+                hosted_llm_api_key=api_key or None,
+                hosted_llm_max_tokens=int(max_tokens) if max_tokens else None,
+            )
+        except ApiAuthError as e:
+            return str(e), ""
+        except ApiClientError as e:
+            return f"Save failed: {e}", ""
+
+        try:
+            config = client.get_backend_config(admin_password or "")
+        except (ApiAuthError, ApiClientError):
+            return "Saved - restart the backend (Service Control section) for this to take effect.", ""
+        _, status_line = _backend_status_markdown(config)
+        return "Saved - restart the backend (Service Control section) for this to take effect.", status_line
 
     def _format_candidate(candidate: dict) -> str:
         keep = candidate["keep"]
@@ -507,6 +564,27 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                 frontend_restart_btn = gr.Button("Restart")
             service_action_status = gr.Markdown("")
 
+        with gr.Group(visible=False) as backend_config_group:
+            gr.Markdown("### Chat Backend")
+            gr.Markdown(
+                "Which backend chat generation (RAG answers, wiki summaries, entity extraction) "
+                "uses. Embeddings always run on local Ollama regardless of this setting. Saving "
+                "writes the choice to config.yaml - it only takes effect after a backend restart "
+                "(use the Service Control section above)."
+            )
+            backend_gpu_status = gr.Markdown("")
+            backend_status = gr.Markdown("")
+            backend_radio = gr.Radio(["ollama", "hosted_api"], label="Chat backend", value="ollama")
+            with gr.Row():
+                backend_model_box = gr.Textbox(label="Hosted model", value="claude-haiku-4-5")
+                backend_max_tokens_box = gr.Number(label="Max tokens", value=1024, precision=0)
+            backend_api_key_box = gr.Textbox(
+                label="Hosted API key (leave blank to keep the currently configured one)",
+                type="password",
+            )
+            save_backend_btn = gr.Button("Save backend config")
+            save_backend_status = gr.Markdown("")
+
         dedupe_candidates_state = gr.State([])
         dedupe_index_state = gr.State(0)
 
@@ -550,10 +628,15 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                 upload_group,
                 db_browser_group,
                 service_control_group,
+                backend_config_group,
                 merge_review_group,
                 unlock_status,
                 admin_password_state,
             ],
+        ).then(
+            load_backend_config,
+            inputs=[admin_password_state],
+            outputs=[backend_radio, backend_model_box, backend_max_tokens_box, backend_gpu_status, backend_status],
         )
         unlock_password_box.submit(
             unlock_admin,
@@ -562,10 +645,15 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
                 upload_group,
                 db_browser_group,
                 service_control_group,
+                backend_config_group,
                 merge_review_group,
                 unlock_status,
                 admin_password_state,
             ],
+        ).then(
+            load_backend_config,
+            inputs=[admin_password_state],
+            outputs=[backend_radio, backend_model_box, backend_max_tokens_box, backend_gpu_status, backend_status],
         )
 
         upload_file.upload(
@@ -579,6 +667,12 @@ def build_app(client: ApiClient, api_base_url: str, controller_client: Controlle
         refresh_status_btn.click(
             refresh_service_status, inputs=[admin_password_state], outputs=[service_status_text]
         )
+        save_backend_btn.click(
+            save_backend_config,
+            inputs=[backend_radio, backend_model_box, backend_api_key_box, backend_max_tokens_box, admin_password_state],
+            outputs=[save_backend_status, backend_status],
+        )
+
         for service, start_btn, stop_btn, restart_btn in [
             ("backend", backend_start_btn, backend_stop_btn, backend_restart_btn),
             ("frontend", frontend_start_btn, frontend_stop_btn, frontend_restart_btn),
