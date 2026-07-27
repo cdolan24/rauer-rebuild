@@ -1,0 +1,17 @@
+[Unit]
+Description=Unified Document Compiler Gradio frontend
+After=network.target udc-backend.service
+Wants=udc-backend.service
+
+[Service]
+Type=simple
+User=udc
+Group=udc
+WorkingDirectory=/opt/udc
+Environment=UDC_CONFIG=/opt/udc/config.yaml
+ExecStart=/opt/udc/venv/bin/python src/frontend/app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

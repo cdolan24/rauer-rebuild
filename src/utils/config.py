@@ -191,4 +191,4 @@ def _resolve_secret(value: str | None) -> str | None:
 
 
 def get_config_path() -> str:
-    return os.environ.get("BUDDHARAUER_CONFIG", "config.yaml")
+    return os.environ.get("UDC_CONFIG", "config.yaml")

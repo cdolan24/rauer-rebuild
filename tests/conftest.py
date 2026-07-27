@@ -118,7 +118,7 @@ def api_client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     config_path = write_test_config(tmp_path)
-    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setenv("UDC_CONFIG", config_path)
     monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
 
     app = main_module.create_app()
@@ -132,7 +132,7 @@ def unhealthy_api_client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     config_path = write_test_config(tmp_path)
-    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setenv("UDC_CONFIG", config_path)
     monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient(fail=True))
 
     app = main_module.create_app()
@@ -177,7 +177,7 @@ def chat_backend_failing_api_client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     config_path = write_test_config(tmp_path)
-    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setenv("UDC_CONFIG", config_path)
     monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
     monkeypatch.setattr(
         main_module, "build_chat_backend", lambda config, ollama_client: _FakeFailingChatChatBackend()
@@ -196,7 +196,7 @@ def hosted_backend_unreachable_api_client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     config_path = write_test_config(tmp_path)
-    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setenv("UDC_CONFIG", config_path)
     monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
     monkeypatch.setattr(
         main_module, "build_chat_backend", lambda config, ollama_client: _FakeUnreachableChatBackend()

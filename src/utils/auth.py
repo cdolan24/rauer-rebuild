@@ -19,7 +19,7 @@ def get_client_ip(request: Request) -> str:
     out every legitimate admin too, and anyone can repeat that indefinitely -
     an unauthenticated denial-of-service against the admin surface, not a
     per-attacker defense. Nginx is configured to forward X-Forwarded-For/
-    X-Real-IP (see nginx-buddharauer.conf), so those are trusted ahead of
+    X-Real-IP (see nginx-udc.conf), so those are trusted ahead of
     the raw ASGI peer address, which remains the fallback for direct/local
     use without a proxy in front.
     """

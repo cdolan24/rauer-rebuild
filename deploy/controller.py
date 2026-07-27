@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""Minimal, narrowly-scoped local service-control daemon for Buddharauer.
+"""Minimal, narrowly-scoped local service-control daemon for Unified Document Compiler.
 
-Runs as its own systemd unit (buddharauer-controller.service) with a
+Runs as its own systemd unit (udc-controller.service) with a
 sudoers.d rule permitting ONLY `systemctl start/stop/restart` on the app's
-two service units (see deploy/sudoers-buddharauer-controller and
+two service units (see deploy/sudoers-udc-controller and
 deploy/README.md) - nothing else. Binds to 127.0.0.1 only, so it's never
 reachable through the reverse proxy, only from the frontend process on the
 same host.
@@ -23,10 +23,10 @@ from src.utils.auth import check_admin_password
 from src.utils.config import get_config_path, load_config
 from src.utils.rate_limiter import RateLimiter
 
-_ALLOWED_SERVICES = {"backend": "buddharauer-backend", "frontend": "buddharauer-frontend"}
+_ALLOWED_SERVICES = {"backend": "udc-backend", "frontend": "udc-frontend"}
 _ALLOWED_ACTIONS = {"start", "stop", "restart"}
 
-app = FastAPI(title="Buddharauer Controller")
+app = FastAPI(title="Unified Document Compiler Controller")
 _rate_limiter = RateLimiter()
 
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Buddharauer FastAPI backend
+Description=Unified Document Compiler FastAPI backend
 # Every profile uses Ollama for embeddings (gpu-inhouse also uses it for
 # chat) - soft-ordered after it so a fresh boot doesn't serve degraded
 # requests during Ollama's own startup. Not a hard Requires=: the backend
@@ -10,11 +10,11 @@ Wants=ollama.service
 
 [Service]
 Type=simple
-User=buddharauer
-Group=buddharauer
-WorkingDirectory=/opt/buddharauer
-Environment=BUDDHARAUER_CONFIG=/opt/buddharauer/config.yaml
-ExecStart=/opt/buddharauer/venv/bin/python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+User=udc
+Group=udc
+WorkingDirectory=/opt/udc
+Environment=UDC_CONFIG=/opt/udc/config.yaml
+ExecStart=/opt/udc/venv/bin/python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
 

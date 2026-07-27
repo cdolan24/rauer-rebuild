@@ -428,7 +428,7 @@ def test_verify_admin_password_rejects_when_none_configured(tmp_path, monkeypatc
         encoding="utf-8",
     )
 
-    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setenv("UDC_CONFIG", config_path)
     monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
 
     app = main_module.create_app()
@@ -478,7 +478,7 @@ def test_upload_document_rejects_when_no_admin_password_configured(tmp_path, mon
         encoding="utf-8",
     )
 
-    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setenv("UDC_CONFIG", config_path)
     monkeypatch.setattr(main_module, "OllamaClient", lambda base_url, timeout=60.0: FakeOllamaClient())
 
     app = main_module.create_app()

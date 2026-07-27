@@ -1,5 +1,5 @@
 [Unit]
-Description=Run the Buddharauer backup daily
+Description=Run the Unified Document Compiler backup daily
 
 [Timer]
 OnCalendar=daily

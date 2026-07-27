@@ -1,0 +1,12 @@
+[Unit]
+Description=Unified Document Compiler database + vector store backup
+
+[Service]
+Type=oneshot
+User=udc
+Group=udc
+WorkingDirectory=/opt/udc
+Environment=UDC_DATA_STORAGE=/opt/udc/data_storage/udc.db
+Environment=UDC_VECTOR_DB=/opt/udc/vector_db
+Environment=UDC_BACKUP_DIR=/opt/udc/backups
+ExecStart=/opt/udc/deploy/backup.sh

@@ -69,16 +69,16 @@ setup instructions on either cloud.
 
 ```bash
 # In-house / GPU (default) - AWS
-sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./deploy/setup_ec2.sh
+sudo UDC_REPO_URL=https://github.com/you/rauer-rebuild.git ./deploy/setup_ec2.sh
 
 # Cost-optimized, no GPU - AWS
-sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git DEPLOY_PROFILE=cpu-hosted-api ./deploy/setup_ec2.sh
+sudo UDC_REPO_URL=https://github.com/you/rauer-rebuild.git DEPLOY_PROFILE=cpu-hosted-api ./deploy/setup_ec2.sh
 
 # In-house / GPU (default) - Azure
-sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./deploy/setup_azure_vm.sh
+sudo UDC_REPO_URL=https://github.com/you/rauer-rebuild.git ./deploy/setup_azure_vm.sh
 
 # Cost-optimized, no GPU - Azure
-sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git DEPLOY_PROFILE=cpu-hosted-api ./deploy/setup_azure_vm.sh
+sudo UDC_REPO_URL=https://github.com/you/rauer-rebuild.git DEPLOY_PROFILE=cpu-hosted-api ./deploy/setup_azure_vm.sh
 ```
 
 Under `cpu-hosted-api`, set a real `hosted_llm.api_key` in `config.yaml` before starting

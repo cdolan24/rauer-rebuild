@@ -17,7 +17,7 @@ from tests.conftest import TEST_ADMIN_PASSWORD, write_test_config
 @pytest.fixture
 def controller_client(tmp_path, monkeypatch):
     config_path = write_test_config(tmp_path)
-    monkeypatch.setenv("BUDDHARAUER_CONFIG", config_path)
+    monkeypatch.setenv("UDC_CONFIG", config_path)
     # controller_module.app and its rate limiter are process-wide singletons
     # (the controller is meant to run as one long-lived systemd process) -
     # give each test a fresh limiter so failures in one test don't lock out
@@ -48,7 +48,7 @@ def test_control_restarts_service_with_correct_password(controller_client, monke
 
     assert response.status_code == 200
     assert response.json() == {"service": "backend", "action": "restart", "status": "ok"}
-    assert calls == [["sudo", "systemctl", "restart", "buddharauer-backend"]]
+    assert calls == [["sudo", "systemctl", "restart", "udc-backend"]]
 
 
 def test_control_rejects_wrong_password_without_running_systemctl(controller_client, monkeypatch):

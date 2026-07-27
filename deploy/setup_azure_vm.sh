@@ -1,5 +1,5 @@
 #!/bin/bash
-# Buddharauer Azure VM setup script. Run as root on a fresh Ubuntu 22.04 VM.
+# Unified Document Compiler Azure VM setup script. Run as root on a fresh Ubuntu 22.04 VM.
 #
 # Two deployment profiles, selected via DEPLOY_PROFILE:
 #   gpu-inhouse    (default) - today's behavior: Ollama runs both chat
@@ -9,22 +9,24 @@
 #                  here. Use this for hardware you already own/have quota for.
 #   cpu-hosted-api - no GPU needed: chat generation routes to a hosted API
 #                  (config.yaml's hosted_llm section), Ollama only runs
-#                  embeddings on a small CPU size (e.g. Standard_B2s). Cost-
-#                  optimized - see openspec/specs/deployment/.
+#                  embeddings on a small CPU size (e.g. Standard_D2ls_v7, or
+#                  Standard_B2s if available on your subscription/region -
+#                  see deploy/README.md). Cost-optimized - see
+#                  openspec/specs/deployment/.
 #
 # This script has not been run against a real Azure subscription from this
 # development environment (no Azure credentials here) - review each step
 # before running it against a real VM. See deploy/README.md for the
 # az vm create / NSG prerequisites this script assumes are already done.
 #
-# Usage: sudo BUDDHARAUER_REPO_URL=https://github.com/you/rauer-rebuild.git ./setup_azure_vm.sh
-# Usage (cost-optimized profile): sudo BUDDHARAUER_REPO_URL=... DEPLOY_PROFILE=cpu-hosted-api ./setup_azure_vm.sh
+# Usage: sudo UDC_REPO_URL=https://github.com/you/rauer-rebuild.git ./setup_azure_vm.sh
+# Usage (cost-optimized profile): sudo UDC_REPO_URL=... DEPLOY_PROFILE=cpu-hosted-api ./setup_azure_vm.sh
 set -euo pipefail
 
-APP_DIR=/opt/buddharauer
-APP_USER=buddharauer
-CONTROLLER_USER=buddharauer-controller
-REPO_URL="${BUDDHARAUER_REPO_URL:?Set BUDDHARAUER_REPO_URL to the repo clone URL}"
+APP_DIR=/opt/udc
+APP_USER=udc
+CONTROLLER_USER=udc-controller
+REPO_URL="${UDC_REPO_URL:?Set UDC_REPO_URL to the repo clone URL}"
 DEPLOY_PROFILE="${DEPLOY_PROFILE:-gpu-inhouse}"
 case "$DEPLOY_PROFILE" in
     gpu-inhouse|cpu-hosted-api) ;;
@@ -107,32 +109,32 @@ HOSTED_LLM
 fi
 chown "$APP_USER:$APP_USER" "$APP_DIR/config.yaml"
 # config.yaml holds plaintext secrets (admin_password, hosted_llm.api_key) -
-# owner+group only (buddharauer-controller reads it as a group member, see
+# owner+group only (udc-controller reads it as a group member, see
 # above), not the world-readable default a plain cp leaves it at.
 chmod 640 "$APP_DIR/config.yaml"
 
 echo "==> Installing systemd units"
-cp "$APP_DIR/deploy/buddharauer-backend.service" /etc/systemd/system/
-cp "$APP_DIR/deploy/buddharauer-frontend.service" /etc/systemd/system/
-cp "$APP_DIR/deploy/buddharauer-controller.service" /etc/systemd/system/
-cp "$APP_DIR/deploy/buddharauer-backup.service" /etc/systemd/system/
-cp "$APP_DIR/deploy/buddharauer-backup.timer" /etc/systemd/system/
+cp "$APP_DIR/deploy/udc-backend.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/udc-frontend.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/udc-controller.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/udc-backup.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/udc-backup.timer" /etc/systemd/system/
 chmod +x "$APP_DIR/deploy/backup.sh"
 systemctl daemon-reload
 
 echo "==> Installing sudoers rule for the controller"
-install -m 0440 "$APP_DIR/deploy/sudoers-buddharauer-controller" /etc/sudoers.d/buddharauer-controller
+install -m 0440 "$APP_DIR/deploy/sudoers-udc-controller" /etc/sudoers.d/udc-controller
 visudo -c
 
 echo "==> Installing Nginx config"
-cp "$APP_DIR/deploy/nginx-buddharauer.conf" /etc/nginx/sites-available/buddharauer
-ln -sf /etc/nginx/sites-available/buddharauer /etc/nginx/sites-enabled/buddharauer
+cp "$APP_DIR/deploy/nginx-udc.conf" /etc/nginx/sites-available/udc
+ln -sf /etc/nginx/sites-available/udc /etc/nginx/sites-enabled/udc
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 
 echo "==> Enabling services (not starting yet - edit config.yaml and server_name first)"
-systemctl enable buddharauer-backend buddharauer-frontend buddharauer-controller nginx
-systemctl enable --now buddharauer-backup.timer
+systemctl enable udc-backend udc-frontend udc-controller nginx
+systemctl enable --now udc-backup.timer
 
 cat <<EOF
 
@@ -149,12 +151,12 @@ cat <<EOF
 EOF
 fi
 cat <<EOF
-  2. Edit /etc/nginx/sites-available/buddharauer - set server_name to your
+  2. Edit /etc/nginx/sites-available/udc - set server_name to your
      actual domain.
   3. Point your domain's DNS at this VM's public IP, then get a TLS cert:
        certbot --nginx -d your-domain.example.com
   4. Start everything:
-       systemctl start buddharauer-backend buddharauer-frontend buddharauer-controller nginx
+       systemctl start udc-backend udc-frontend udc-controller nginx
   5. Check status:
-       systemctl status buddharauer-backend buddharauer-frontend buddharauer-controller
+       systemctl status udc-backend udc-frontend udc-controller
 EOF

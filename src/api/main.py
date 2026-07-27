@@ -60,9 +60,9 @@ async def lifespan(app: FastAPI):
     app.state.chat_engine = chat_engine
     app.state.admin_rate_limiter = RateLimiter()
 
-    logger.info("Buddharauer API started.")
+    logger.info("Unified Document Compiler API started.")
     yield
-    logger.info("Buddharauer API shutting down.")
+    logger.info("Unified Document Compiler API shutting down.")
 
 
 def create_app() -> FastAPI:

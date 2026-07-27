@@ -1,0 +1,14 @@
+# Install with: sudo install -m 0440 deploy/sudoers-udc-controller /etc/sudoers.d/udc-controller
+# Then validate with: sudo visudo -c
+#
+# Grants the udc-controller system user passwordless sudo for
+# EXACTLY these six commands - nothing else. This is the entire privilege
+# boundary for deploy/controller.py; do not widen it (e.g. no wildcard
+# "systemctl *", no shell access).
+
+udc-controller ALL=(root) NOPASSWD: /usr/bin/systemctl start udc-backend
+udc-controller ALL=(root) NOPASSWD: /usr/bin/systemctl stop udc-backend
+udc-controller ALL=(root) NOPASSWD: /usr/bin/systemctl restart udc-backend
+udc-controller ALL=(root) NOPASSWD: /usr/bin/systemctl start udc-frontend
+udc-controller ALL=(root) NOPASSWD: /usr/bin/systemctl stop udc-frontend
+udc-controller ALL=(root) NOPASSWD: /usr/bin/systemctl restart udc-frontend

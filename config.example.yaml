@@ -36,10 +36,10 @@ chunking:
 
 vector_db:
   path: "./vector_db"
-  collection_name: "buddharauer_docs"
+  collection_name: "udc_docs"
 
 data_storage:
-  path: "./data_storage/buddharauer.db"
+  path: "./data_storage/udc.db"
 
 paths:
   data_dir: "./data"
