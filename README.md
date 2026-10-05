@@ -10,6 +10,16 @@ don't want to pay for a GPU instance just to run a local chat model.
 See `openspec/changes/archive/2026-07-06-rebuild-mvp/` for the design rationale and full
 task breakdown behind this build.
 
+## Status
+
+**Functionally complete.** Every planned OpenSpec change has been implemented and archived
+(`openspec/changes/archive/`), with no active changes outstanding. The current capability
+specs live in `openspec/specs/`. Further work would be maintenance or new features rather
+than finishing the original scope.
+
+This project supersedes the earlier `buddharauer` and `rauer-test` repositories, which were
+prior iterations of the same app and are kept only for reference.
+
 ## Prerequisites
 
 - Python 3.10+
